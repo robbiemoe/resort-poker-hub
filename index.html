@@ -1,0 +1,2288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resort Poker Hub</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- SheetJS (xlsx) for Multiple Sheet Excel Exports -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    body {
+      background-color: black;
+      color: white;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #111827; }
+    ::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #6B7280; }
+    
+    .bg-pattern {
+      background-color: #0f172a;
+      background-image: radial-gradient(#1e293b 2px, transparent 2px);
+      background-size: 20px 20px;
+    }
+
+    .draggable-item { user-select: none; -webkit-user-select: none; }
+    
+    .primary-action-glow {
+      box-shadow: 0 0 8px 1px currentColor;
+      animation: pulse-border 2s infinite;
+    }
+    @keyframes pulse-border {
+      0% { box-shadow: 0 0 0 0 rgba(currentColor, 0.7); }
+      70% { box-shadow: 0 0 0 4px rgba(currentColor, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(currentColor, 0); }
+    }
+
+    .ai-spinner {
+      border: 4px solid rgba(216, 182, 115, 0.2);
+      border-radius: 50%;
+      border-top: 4px solid #D8B673;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- JSONBIN CLOUD API CONFIGURATION ---
+    const JSONBIN_BIN_ID = '6a04497fadc21f119a9324a4';
+    const JSONBIN_MASTER_KEY = '$2a$10$4NeR1k0kyus0zd7cUTvV0ebDHnJLoGDb67x3Yvh1KVZjFu47PGQRG';
+    const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
+
+    // --- Constants & Config ---
+    const BLINDS = [
+      { blind: '$5 | $10', buyIn: '$400 - $1,500', prefix: 'A' },
+      { blind: '$10 | $20', buyIn: '$800 - $4,000', prefix: 'B' },
+      { blind: '$15 | $30', buyIn: '$1,200 - $6,000', prefix: 'C' },
+      { blind: '$20 | $40', buyIn: '$1,500 - $8,000', prefix: 'D' },
+      { blind: '$25 | $50', buyIn: '$2,000 - $20,000', prefix: 'E' },
+      { blind: '$50 | $100', buyIn: '$4,000 - No Limit', prefix: 'F' },
+      { blind: '$100 | $200', buyIn: '$8,000 - No Limit', prefix: 'G' },
+    ];
+    const MAX_ROWS = 10;
+    const ADMIN_PASSWORD = 'Admin8888';
+    const CALLING_TIME_LIMIT_MS = 10 * 60 * 1000; 
+
+    const DEFAULT_BLIND_PRESETS = {
+        0: { A: false, B: true, C: true, D: false, E: true, F: true, G: false }, 
+        1: { A: true, B: true, C: true, D: false, E: true, F: true, G: false },  
+        2: { A: true, B: true, C: true, D: false, E: true, F: true, G: false },
+        3: { A: true, B: true, C: true, D: false, E: true, F: true, G: false },
+        4: { A: true, B: true, C: true, D: false, E: true, F: true, G: false },
+        5: { A: false, B: true, C: true, D: false, E: true, F: true, G: false }, 
+        6: { A: false, B: true, C: true, D: false, E: true, F: true, G: false }  
+    };
+
+    // --- SVG Icons ---
+    const Icons = {
+      Clock: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
+      Alert: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>,
+      Download: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>,
+      Shield: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>,
+      ChevronDown: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>,
+      ChevronUp: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7"></path></svg>,
+      ChevronRight: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>,
+      Close: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>,
+      CheckDouble: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7M5 18l4 4L19 12"></path></svg>,
+      Camera: () => <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>,
+      Upload: () => <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>,
+      Cloud: () => <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+    };
+
+    // --- Sub-Components Definitions ---
+    function CameraScanner({ title, type, onCapture, onClose }) {
+      const videoRef = useRef(null);
+      const [error, setError] = useState('');
+
+      useEffect(() => {
+        let currentStream = null;
+        const startCamera = async () => {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            if (videoRef.current) videoRef.current.srcObject = stream;
+            currentStream = stream;
+          } catch (err) {
+            setError('Camera access denied or unavailable. Please check your browser permissions.');
+          }
+        };
+        startCamera();
+        return () => { if (currentStream) currentStream.getTracks().forEach(track => track.stop()); };
+      }, []);
+
+      const handleCapture = () => {
+        if (videoRef.current) {
+          const canvas = document.createElement('canvas');
+          canvas.width = videoRef.current.videoWidth;
+          canvas.height = videoRef.current.videoHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+          onCapture(canvas.toDataURL('image/jpeg').split(',')[1], 'image/jpeg');
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-[80] flex flex-col bg-black">
+          <div className="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800">
+            <h3 className="text-white font-bold text-lg">{title}</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-white p-2"><Icons.Close /></button>
+          </div>
+          <div className="flex-1 relative flex items-center justify-center bg-black overflow-hidden">
+            {error ? <p className="text-red-400 px-6 text-center leading-relaxed">{error}</p> : <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover"></video>}
+            {!error && (
+              <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center border-[40px] border-black/40 border-solid">
+                 <div className={`border-2 border-[#D8B673] border-dashed rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.4)] ${type === 'ticket' ? 'w-56 sm:w-64 h-[28rem] sm:h-[32rem]' : 'w-full max-w-sm h-56 sm:h-64'}`}></div>
+                 <p className="text-white font-bold mt-4 tracking-widest text-shadow drop-shadow-md">ALIGN WITHIN BOX</p>
+              </div>
+            )}
+          </div>
+          <div className="p-6 bg-gray-900 flex justify-center pb-12 border-t border-gray-800">
+            <button onClick={handleCapture} disabled={!!error} className="w-16 h-16 rounded-full bg-white border-4 border-gray-400 shadow-lg active:scale-95 transition-transform flex items-center justify-center disabled:opacity-50">
+              <div className="w-12 h-12 rounded-full bg-white border border-gray-300"></div>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    function AdminQueueListItem({ q, b, expandedQId, setExpandedQId, highlightedPhone, setHighlightedPhone, handleDragStartQueue, handleDropToQueueItem, finishQueue, updateQueueStatus, acknowledgeGuestReply, confirmQueuePrompt, isSeated }) {
+      const [timeLeft, setTimeLeft] = useState('');
+
+      useEffect(() => {
+        if (q.status === 'Calling' && q.callingStartedAt) {
+          const interval = setInterval(() => {
+            const elapsed = Date.now() - q.callingStartedAt;
+            const remaining = Math.max(0, CALLING_TIME_LIMIT_MS - elapsed);
+            if (remaining <= 0) setTimeLeft('0:00');
+            else {
+              const mins = Math.floor(remaining / 60000);
+              const secs = Math.floor((remaining % 60000) / 1000);
+              setTimeLeft(`${mins}:${secs.toString().padStart(2, '0')}`);
+            }
+          }, 1000);
+          return () => clearInterval(interval);
+        }
+      }, [q.status, q.callingStartedAt]);
+
+      const isOverride = q.status === 'Calling' && !q.guestReply;
+      const isHighlighted = highlightedPhone && highlightedPhone === q.phone;
+
+      return (
+        <div 
+          className={`flex flex-col ${isHighlighted ? 'bg-yellow-900/40 border-yellow-500' : isSeated ? 'bg-[#064e3b] border-[#047857]' : 'bg-[#111827] border-[#334155]'} rounded overflow-hidden draggable-item transition-all h-max`}
+          draggable={true}
+          onDragStart={(e) => handleDragStartQueue(e, q.id)}
+          onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-t-2', 'border-blue-400'); }}
+          onDragLeave={(e) => e.currentTarget.classList.remove('border-t-2', 'border-blue-400')}
+          onDrop={(e) => { e.currentTarget.classList.remove('border-t-2', 'border-blue-400'); handleDropToQueueItem(e, q.id, b.prefix); }}
+        >
+          <div 
+            className={`flex justify-between items-center p-2.5 cursor-pointer ${isHighlighted ? 'hover:bg-yellow-800/60' : isSeated ? 'hover:bg-[#065f46]' : 'hover:bg-[#1e293b]'} select-none ${expandedQId === q.id ? (isHighlighted ? 'bg-yellow-800/60' : isSeated ? 'bg-[#065f46]' : 'bg-[#1e293b]') : ''}`}
+            onClick={() => {
+                const isExpanding = expandedQId !== q.id;
+                setExpandedQId(isExpanding ? q.id : null);
+                if (setHighlightedPhone) setHighlightedPhone(isExpanding ? q.phone : null);
+            }}
+          >
+            <div className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap w-full">
+               <span className={`shrink-0 ${isHighlighted ? 'text-yellow-400' : isSeated ? 'text-green-400' : 'text-gray-400'}`}>
+                  {expandedQId === q.id ? <Icons.ChevronDown /> : <Icons.ChevronRight />}
+               </span>
+               <span className={`text-sm font-bold shrink-0 ${isHighlighted ? 'text-yellow-300' : isSeated ? 'text-green-300' : 'text-white'}`}>{q.id}</span>
+               <span className={`text-[10px] sm:text-xs truncate ${isHighlighted ? 'text-yellow-200' : isSeated ? 'text-green-200' : 'text-gray-300'}`}>({q.nickName}){isSeated ? ' [SEATED]' : ''}</span>
+               <span className={`text-[8px] sm:text-[9px] px-1 py-0.5 rounded font-bold uppercase tracking-wide shrink-0 ml-auto
+                    ${q.status === 'Pending' ? 'bg-gray-700 text-gray-300' : ''}
+                    ${q.status === 'Confirmed' ? 'bg-[#1e3a8a] text-blue-300' : ''}
+                    ${q.status === 'Next' ? 'bg-[#581c87] text-purple-300' : ''}
+                    ${q.status === 'Calling' ? 'bg-red-600 text-white animate-pulse' : ''}
+                    ${q.status === "Time's Up" ? 'bg-red-900 text-red-300' : ''}
+                    ${q.status === 'Arrived' ? 'bg-green-600 text-white' : ''}
+               `}>
+                 {q.status === 'Calling' ? <span className="flex items-center gap-0.5"><Icons.Clock/> {timeLeft || '10:00'}</span> : q.status}
+               </span>
+            </div>
+            <button onClick={(e) => { e.stopPropagation(); finishQueue(q.id, 'Canceled'); }} className={`p-1 shrink-0 ml-1 ${isHighlighted ? 'text-yellow-400 hover:text-red-400' : isSeated ? 'text-green-400 hover:text-red-400' : 'text-gray-500 hover:text-red-400'}`}>
+              <Icons.Close />
+            </button>
+          </div>
+
+          {expandedQId === q.id ? (
+            <div className="p-2 border-t border-[#334155] flex flex-col gap-2 bg-[#0f172a] shadow-inner">
+              <div className="grid grid-cols-[60px_1fr] gap-1 text-gray-300 text-[10px] sm:text-xs items-start">
+                 <span className="text-gray-500 font-bold">Member:</span>
+                 <span className="leading-tight text-white font-medium">{q.memberName || 'N/A'} <br/><span className="text-gray-400 text-[9px]">{q.memberId || 'N/A'}</span></span>
+                 <span className="text-gray-500 font-bold">Ph:</span><span>{q.phone}</span>
+                 <span className="text-gray-500 font-bold">Stat:</span>
+                 <span className={`font-bold ${q.status==='Calling' ? 'text-red-400' : q.status==='Arrived' ? 'text-green-400' : 'text-blue-400'}`}>{q.status}</span>
+                 {q.guestReply ? <><span className="text-gray-500 font-bold mt-1">Reply:</span><span className="text-yellow-400 font-bold mt-1">{q.guestReply}</span></> : null}
+              </div>
+
+              {q.status === 'Calling' && !q.guestReply ? <div className="text-red-400/80 text-[9px] italic">Waiting for guest response...</div> : null}
+              
+              <div className="flex flex-col gap-1.5 mt-1">
+                <div className="flex gap-1.5">
+                  {q.status === 'Pending' ? <button onClick={(e) => { e.stopPropagation(); confirmQueuePrompt(q); }} className="flex-1 bg-blue-700 hover:bg-blue-600 text-white text-[10px] sm:text-xs font-bold py-1.5 rounded transition shadow primary-action-glow text-blue-300">Confirm</button> : null}
+                  {q.status === 'Confirmed' ? <button onClick={(e) => { e.stopPropagation(); updateQueueStatus(q.id, 'Next'); }} className="flex-1 bg-[#581c87] hover:bg-[#4c1d95] text-white text-[10px] sm:text-xs font-bold py-1.5 rounded transition shadow primary-action-glow text-purple-300">Set 'Next'</button> : null}
+                  {q.status === 'Next' ? <button onClick={(e) => { e.stopPropagation(); updateQueueStatus(q.id, 'Calling'); }} className="flex-1 bg-[#b91c1c] hover:bg-[#991b1b] text-white text-[10px] sm:text-xs font-bold py-1.5 rounded transition shadow primary-action-glow text-red-300">Call (10m)</button> : null}
+                  {q.status === 'Calling' && q.guestReply && !q.adminReply ? <button onClick={() => acknowledgeGuestReply(q.id)} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 rounded transition shadow primary-action-glow text-blue-200">Reply (Noted)</button> : null}
+                </div>
+                <div className="flex gap-1.5">
+                  {q.status !== "Time's Up" && q.status !== 'Arrived' ? <button onClick={(e) => { e.stopPropagation(); updateQueueStatus(q.id, 'Arrived'); }} className={`flex-1 bg-green-600 hover:bg-green-500 text-white text-[10px] sm:text-xs font-bold py-1.5 rounded transition shadow ${(q.status === 'Calling' && q.adminReply) ? 'primary-action-glow text-green-300' : ''}`}>{isOverride ? 'Arrived (Override)' : 'Guest Arrived'}</button> : null}
+                  {q.status === 'Arrived' ? <div className="flex-1 border border-green-600/50 bg-green-900/20 text-green-400 text-[9px] sm:text-[10px] font-bold py-1.5 rounded text-center leading-tight">Guest Arrived - Drag to Table</div> : null}
+                  <button onClick={(e) => { e.stopPropagation(); finishQueue(q.id, q.status === "Time's Up" ? 'Canceled (No Show)' : 'Canceled'); }} className={`flex-1 border text-[10px] sm:text-xs font-bold py-1.5 rounded transition ${q.status === "Time's Up" ? 'bg-red-800 text-white border-red-600 hover:bg-red-700 primary-action-glow text-red-200' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-red-900 hover:text-white hover:border-red-700'}`}>{q.status === "Time's Up" ? 'Remove (No Show)' : 'Remove Queue'}</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+    function PlayerMovementList({ data, tables, updateData, onBack, requestDelete, bulkDelete, onApplyPenalty, onCheckPenalty }) {
+      const [filterBlind, setFilterBlind] = useState('All');
+      const tableOptions = Array.from({length: 12}, (_, i) => `E05-NL${(i+1).toString().padStart(2, '0')}`);
+      const seatOptions = ['Seat 1', 'Seat 2', 'Seat 3', 'Seat 4', 'Seat 5', 'Seat 6', 'Seat 7', 'Seat 8', 'Seat 9', 'Spare'];
+      const blindOptions = ['5/10', '10/20', '15/30', '20/40', '25/50', '50/100', '100/200'];
+      const statusOptions = ['Pending', 'Completed', 'Cancel'];
+
+      const pendingCount = data.filter(d => d.status === 'Pending').length;
+      const completedCount = data.filter(d => d.status === 'Completed').length;
+      const cancelCount = data.filter(d => d.status === 'Cancel').length;
+
+      const handleChange = (index, field, value) => {
+        const newData = [...data];
+        const row = { ...newData[index] };
+        
+        row[field] = value;
+
+        if (field === 'table') {
+           row.seat = '';
+           row.player = '';
+           if (value !== '') {
+               const selectedTable = tables.find(t => t.id === value);
+               if (selectedTable && selectedTable.blindPrefix) {
+                   const blindMatch = BLINDS.find(b => b.prefix === selectedTable.blindPrefix);
+                   if (blindMatch) {
+                       const simpleBlind = blindMatch.blind.replace(/\$/g, '').replace(/ /g, '').replace('|', '/');
+                       row.blind = simpleBlind;
+                       if (!row.reqTime) row.reqTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                   }
+               }
+           }
+        }
+
+        if (field === 'seat' && row.table && value !== '') {
+           const selectedTable = tables.find(t => t.id === row.table);
+           if (selectedTable) {
+              let seatIndex = -1;
+              if (value.startsWith('Seat ')) seatIndex = parseInt(value.replace('Seat ', '')) - 1;
+              else if (value === 'Spare') seatIndex = 9;
+              
+              if (seatIndex >= 0 && seatIndex < 10) {
+                 const playerAtSeat = selectedTable.seats[seatIndex];
+                 if (playerAtSeat) {
+                    const playerStr = `${playerAtSeat.id} (${playerAtSeat.nickName})`;
+                    row.player = playerStr;
+                    if (!row.blind && selectedTable.blindPrefix) {
+                        const blindMatch = BLINDS.find(b => b.prefix === selectedTable.blindPrefix);
+                        if (blindMatch) row.blind = blindMatch.blind.replace(/\$/g, '').replace(/ /g, '').replace('|', '/');
+                    }
+                    if (!row.reqTime) row.reqTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                    
+                    if (onCheckPenalty) {
+                        onCheckPenalty(playerStr, null, () => {
+                            setTimeout(() => {
+                                const revertedData = [...data];
+                                revertedData[index].player = '';
+                                revertedData[index].seat = '';
+                                updateData(revertedData);
+                            }, 50);
+                        });
+                    }
+                 } else row.player = '';
+              }
+           }
+        }
+
+        if (field === 'blind' && value !== '' && !row.reqTime) row.reqTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        if (field === 'status' && value !== '') row.movedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+
+        newData[index] = row;
+        updateData(newData);
+      };
+
+      const handleClearCompleted = () => {
+          const completedIndices = [];
+          const completedRows = [];
+          data.forEach((row, idx) => {
+              if (row.status === 'Completed' || row.status === 'Cancel') {
+                  completedIndices.push(idx);
+                  completedRows.push(row);
+              }
+          });
+          if (completedIndices.length > 0) bulkDelete(completedIndices, completedRows);
+      };
+
+      return (
+        <div className="bg-gray-50 text-black rounded-lg shadow-2xl h-full flex flex-col w-full overflow-hidden border border-gray-300">
+          <div className="flex flex-col sm:flex-row justify-between items-center p-4 sm:p-6 pb-2 sm:pb-4 gap-4 bg-white border-b border-gray-200 shrink-0">
+            <div className="flex flex-col items-center sm:items-start">
+               <h2 className="text-xl sm:text-2xl font-black tracking-wider text-gray-800 uppercase mb-2">Movement List (Seat/Table Transfer)</h2>
+               <div className="flex gap-2">
+                 <span className="bg-yellow-100 text-yellow-800 border border-yellow-200 px-2 py-0.5 rounded text-xs font-bold">Pending: {pendingCount}</span>
+                 <span className="bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded text-xs font-bold">Completed: {completedCount}</span>
+                 <span className="bg-red-100 text-red-800 border border-red-200 px-2 py-0.5 rounded text-xs font-bold">Canceled: {cancelCount}</span>
+               </div>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button onClick={handleClearCompleted} className="flex-1 sm:flex-none bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-500 transition text-sm shadow flex items-center justify-center gap-1">
+                <Icons.CheckDouble /> Clear Finished
+              </button>
+              <button onClick={onBack} className="flex-1 sm:flex-none bg-gray-800 text-white px-4 py-2 rounded font-bold hover:bg-gray-700 transition text-sm shadow">
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-auto w-full custom-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[750px] lg:min-w-[1000px] relative">
+              <thead>
+                <tr className="bg-[#1e293b] text-white shadow-[0_2px_4px_rgba(0,0,0,0.1)]">
+                  <th className="sticky left-0 z-20 border-b border-[#334155] p-2 w-8 sm:w-10 text-center bg-[#1e293b] shadow-[2px_0_4px_rgba(0,0,0,0.2)]">#</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Table</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-20 sm:w-24">Seat</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-28">
+                     <div className="flex flex-col items-start">
+                       <span>Blinds</span>
+                       <select className="mt-1 text-black bg-gray-200 text-[10px] sm:text-xs px-1 py-0.5 rounded w-full outline-none" value={filterBlind} onChange={e => setFilterBlind(e.target.value)}>
+                          <option value="All">All Blinds</option>
+                          {blindOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                       </select>
+                     </div>
+                  </th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2">Player Name / Queue</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Req Time</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Status</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Moved Time</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 min-w-[200px]">Transfer To / Remark</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-16 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((row, originalIndex) => ({ row, originalIndex }))
+                     .filter(item => {
+                         if (filterBlind === 'All') return true;
+                         const isEmpty = !item.row.table && !item.row.blind && !item.row.player && !item.row.status;
+                         return item.row.blind === filterBlind || isEmpty;
+                     })
+                     .map((item) => {
+                  const { row, originalIndex } = item;
+                  
+                  let rowClass = "transition-colors border-b border-gray-300 min-h-[48px] ";
+                  let leftStickyColor = "bg-white"; 
+                  if (!row.table && !row.player && !row.status) { rowClass += "bg-white hover:bg-gray-50 opacity-60"; leftStickyColor = "bg-white"; } 
+                  else if (row.status === 'Completed') { rowClass += "bg-green-50 hover:bg-green-100"; leftStickyColor = "bg-green-50"; } 
+                  else if (row.status === 'Cancel') { rowClass += "bg-red-50 hover:bg-red-100"; leftStickyColor = "bg-red-50"; } 
+                  else if (row.status === 'Pending') { rowClass += "bg-yellow-50 hover:bg-yellow-100"; leftStickyColor = "bg-yellow-50"; } 
+                  else { rowClass += "bg-white hover:bg-gray-50"; }
+
+                  let statusColorClass = "w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 rounded font-bold text-xs sm:text-sm ";
+                  if (row.status === 'Pending') statusColorClass += "text-yellow-600";
+                  else if (row.status === 'Completed') statusColorClass += "text-green-600";
+                  else if (row.status === 'Cancel') statusColorClass += "text-red-600";
+                  else statusColorClass += "text-black";
+
+                  return (
+                    <tr key={originalIndex} className={rowClass}>
+                      <td className={`sticky left-0 z-10 p-1 text-center font-bold text-gray-500 ${leftStickyColor} shadow-[2px_0_4px_rgba(0,0,0,0.05)]`}>{originalIndex + 1}</td>
+                      <td className="p-1">
+                         <select value={row.table} onChange={e => handleChange(originalIndex, 'table', e.target.value)} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300">
+                           <option value=""></option>
+                           {tableOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                         </select>
+                      </td>
+                      <td className="p-1">
+                         <select value={row.seat || ''} onChange={e => handleChange(originalIndex, 'seat', e.target.value)} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300">
+                           <option value=""></option>
+                           {seatOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                         </select>
+                      </td>
+                      <td className="p-1">
+                         <select value={row.blind} onChange={e => handleChange(originalIndex, 'blind', e.target.value)} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300">
+                           <option value=""></option>
+                           {blindOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                         </select>
+                      </td>
+                      <td className="p-1">
+                         <input 
+                            type="text" value={row.player} onChange={e => handleChange(originalIndex, 'player', e.target.value)} 
+                            onBlur={e => { if (e.target.value && onCheckPenalty) onCheckPenalty(e.target.value, null, () => handleChange(originalIndex, 'player', '')); }}
+                            className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300 font-medium" 
+                         />
+                      </td>
+                      <td className="p-1">
+                         <input type="text" value={row.reqTime} onChange={e => handleChange(originalIndex, 'reqTime', e.target.value)} className="w-full h-full p-1.5 sm:p-2 text-center bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-400 text-xs sm:text-sm rounded border border-transparent hover:border-gray-300" placeholder="--:--" />
+                      </td>
+                      <td className="p-1">
+                         <select value={row.status} onChange={e => handleChange(originalIndex, 'status', e.target.value)} className={statusColorClass + " border border-transparent hover:border-gray-300"}>
+                           <option value=""></option>
+                           {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                         </select>
+                      </td>
+                      <td className="p-1">
+                         <input type="text" value={row.movedTime} onChange={e => handleChange(originalIndex, 'movedTime', e.target.value)} className="w-full h-full p-1.5 sm:p-2 text-center bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-400 text-xs sm:text-sm rounded border border-transparent hover:border-gray-300" placeholder="--:--" />
+                      </td>
+                      <td className="p-1">
+                         <div className="flex flex-col gap-0.5 w-full h-full bg-transparent rounded focus-within:ring-2 focus-within:ring-blue-500 border border-transparent hover:border-gray-300">
+                             <select 
+                                 className="w-full bg-gray-200 text-gray-700 text-[10px] sm:text-xs rounded outline-none cursor-pointer" value=""
+                                 onChange={e => {
+                                     if (e.target.value !== '') {
+                                         if (e.target.value === '1hr' || e.target.value === '2hr') {
+                                            onApplyPenalty(originalIndex, row, e.target.value === '1hr' ? 1 : 2);
+                                         }
+                                         e.target.value = '';
+                                     }
+                                 }}
+                             >
+                                 <option value="">Quick Remark...</option>
+                                 <option value="1hr">Cancel 1 hr cannot queue</option>
+                                 <option value="2hr">Cancel 2 hrs cannot queue</option>
+                             </select>
+                             <input type="text" value={row.remark} onChange={e => handleChange(originalIndex, 'remark', e.target.value)} className="w-full bg-transparent outline-none text-black text-xs sm:text-sm font-medium mt-0.5 px-1" placeholder="Type remark..." />
+                         </div>
+                      </td>
+                      <td className="p-1 text-center">
+                         {(row.player || row.table || row.blind || row.status) ? <button onClick={() => requestDelete(originalIndex, row)} className="bg-red-600 text-white px-2 py-1.5 m-1 text-[10px] sm:text-xs rounded hover:bg-red-500 font-bold transition shadow">Clear</button> : null}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    function QueueBoard({ queues, visibleBlinds }) {
+      const activeQueues = queues.filter(q => ['Confirmed', 'Next', 'Calling', "Time's Up", 'Arrived'].includes(q.status));
+
+      return (
+        <div className="bg-black rounded-lg border border-gray-700 overflow-hidden shadow-2xl relative w-full">
+          <div className="overflow-x-auto w-full pb-2 custom-scrollbar">
+            <table className="w-full table-fixed min-w-[700px] sm:min-w-[1000px] border-collapse relative">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 z-20 w-20 sm:w-24 bg-black border-r border-b border-gray-700 p-2 text-center text-white font-bold text-[10px] sm:text-sm shadow-[2px_0_4px_rgba(0,0,0,0.5)]">
+                    Blind<br/><span className="text-[#64D8D8]">Buy-in</span><br/><span className="text-red-500 mt-1 block">Total Wait List</span>
+                  </th>
+                  {visibleBlinds.map(b => {
+                    const count = activeQueues.filter(q => q.blindObj.prefix === b.prefix).length;
+                    return (
+                      <th key={b.prefix} className="bg-black border-r border-b border-gray-700 p-2 text-center last:border-r-0">
+                        <div className="text-white font-bold text-xs sm:text-sm whitespace-nowrap">{b.blind}</div>
+                        <div className="text-[#64D8D8] font-bold text-[10px] sm:text-xs whitespace-nowrap mt-1">{b.buyIn}</div>
+                        <div className="text-red-500 font-bold text-xs sm:text-sm whitespace-nowrap mt-1">{count}</div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: MAX_ROWS }).map((_, rowIndex) => {
+                  const rowBg = rowIndex % 2 !== 0 ? 'bg-[#333333]' : 'bg-black';
+                  return (
+                    <tr key={rowIndex} className={`${rowBg}`}>
+                      <td className={`sticky left-0 z-10 border-r border-gray-700 p-2 sm:p-3 text-center text-[#64D8D8] font-bold border-b text-xs sm:text-base ${rowBg} shadow-[2px_0_4px_rgba(0,0,0,0.5)]`}>
+                        {rowIndex + 1}
+                      </td>
+                      {visibleBlinds.map(b => {
+                        const queue = activeQueues.filter(q => q.blindObj.prefix === b.prefix)[rowIndex];
+                        let cellClass = "p-2 sm:p-3 text-center border-r border-b border-gray-700 last:border-r-0 h-[45px] sm:h-[60px] font-bold text-sm sm:text-lg align-middle ";
+                        if (queue?.status === 'Calling') cellClass += "bg-[#E63946] text-black shadow-inner animate-pulse";
+                        else if (queue?.status === "Time's Up") cellClass += "bg-red-900 text-red-200 shadow-inner";
+                        else if (queue?.status === 'Arrived') cellClass += "bg-[#4ADE80] text-black shadow-inner"; 
+                        else if (queue) cellClass += "text-[#4ADE80]"; 
+                        else cellClass += "text-transparent";
+
+                        return <td key={b.prefix} className={cellClass}>{queue ? queue.id : ''}</td>;
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    function AdminBlindModal({ blindVis, updateBlindVis, autoBlindEnabled, updateAutoBlindEnabled, weeklyPresets, updateWeeklyPresets, onClose, now }) {
+      const [tab, setTab] = useState('live'); 
+      const [editDay, setEditDay] = useState(1); 
+      const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const td = new Date(now);
+      if (td.getHours() < 4) td.setDate(td.getDate() - 1);
+      const currentDayIdx = td.getDay();
+      const currentDayStr = daysOfWeek[currentDayIdx];
+
+      const applyTodayPreset = () => {
+         const preset = weeklyPresets[currentDayIdx];
+         const newVis = {};
+         BLINDS.forEach(b => newVis[b.prefix] = preset[b.prefix] !== false);
+         updateBlindVis(newVis);
+      };
+
+      return (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1e293b] border border-[#475569] rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="flex justify-between items-center p-4 border-b border-gray-600 bg-[#0f172a]">
+              <h3 className="text-lg font-bold text-[#D8B673]">Table Blind Visibility</h3>
+              <button onClick={onClose} className="text-gray-400 hover:text-white"><Icons.Close /></button>
+            </div>
+
+            <div className="flex bg-gray-800 text-xs sm:text-sm shrink-0">
+                <button onClick={() => setTab('live')} className={`flex-1 py-3 font-bold transition ${tab === 'live' ? 'bg-[#334155] text-white border-b-2 border-[#D8B673]' : 'text-gray-400 hover:text-gray-200'}`}>Live Settings</button>
+                <button onClick={() => setTab('preset')} className={`flex-1 py-3 font-bold transition ${tab === 'preset' ? 'bg-[#334155] text-white border-b-2 border-[#D8B673]' : 'text-gray-400 hover:text-gray-200'}`}>Advanced Presets</button>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar">
+                {tab === 'live' ? (
+                   <div className="space-y-4">
+                      <div className="bg-gray-800 p-3 rounded border border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                         <div>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Current Trading Day</p>
+                            <p className="text-white text-sm font-bold">{currentDayStr} <span className="text-gray-400 font-normal text-xs">(Resets 04:00 AM)</span></p>
+                         </div>
+                         <button onClick={applyTodayPreset} className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-1.5 px-3 rounded shadow transition w-full sm:w-auto shrink-0">
+                            Apply {currentDayStr} Preset
+                         </button>
+                      </div>
+                      <div className="space-y-3">
+                        <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1 border-b border-gray-700 pb-1">Live Board Visibility</p>
+                        {BLINDS.map(b => (
+                          <div key={b.prefix} className="flex justify-between items-center bg-black/40 p-2 rounded border border-gray-700/50">
+                            <span className="text-sm text-gray-200 font-bold">{b.blind} <span className="text-xs text-gray-500 font-normal ml-1">({b.buyIn})</span></span>
+                            <button onClick={() => updateBlindVis({...blindVis, [b.prefix]: !blindVis[b.prefix]})} className={`text-xs font-bold px-3 py-1 rounded-full border transition-colors w-20 ${blindVis[b.prefix] !== false ? 'bg-[#d8b46e] text-black border-[#c29e5a]' : 'bg-gray-800 text-gray-400 border-gray-600'}`}>
+                              {blindVis[b.prefix] !== false ? 'Showing' : 'Hidden'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                   </div>
+                ) : null}
+
+                {tab === 'preset' ? (
+                   <div className="space-y-4">
+                      <label className="flex items-center justify-between p-3 bg-gray-800 rounded border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition">
+                         <div className="pr-2">
+                            <span className="text-white text-sm font-bold block">Auto-Apply Daily Presets</span>
+                            <span className="text-gray-400 text-[10px] sm:text-xs mt-0.5 block leading-tight">Automatically applies the day's preset at 04:00 AM.</span>
+                         </div>
+                         <div className={`relative inline-flex h-6 w-11 items-center rounded-full shrink-0 transition-colors ${autoBlindEnabled ? 'bg-[#D8B673]' : 'bg-gray-600'}`}>
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoBlindEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                         </div>
+                         <input type="checkbox" className="hidden" checked={autoBlindEnabled} onChange={e => updateAutoBlindEnabled(e.target.checked)} />
+                      </label>
+                      <div className="pt-2">
+                         <label className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-2 block">Configure Weekly Schedule</label>
+                         <div className="flex flex-wrap gap-1.5 mb-4">
+                            {[1,2,3,4,5,6,0].map(dayIdx => (
+                               <button key={dayIdx} onClick={() => setEditDay(dayIdx)} className={`px-3 py-1.5 text-xs font-bold rounded-full transition border ${editDay === dayIdx ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200'}`}>
+                                  {daysOfWeek[dayIdx].substring(0,3)}
+                               </button>
+                            ))}
+                         </div>
+                         <div className="bg-black/40 p-3 rounded-lg border border-gray-700 space-y-3">
+                            <h4 className="text-sm text-[#D8B673] font-bold border-b border-gray-700 pb-2 mb-3">{daysOfWeek[editDay]} Preset</h4>
+                            {BLINDS.map(b => {
+                               const isVisible = weeklyPresets[editDay][b.prefix] !== false; 
+                               return (
+                                  <label key={b.prefix} className="flex items-center justify-between cursor-pointer group">
+                                     <span className="text-sm text-gray-200 font-bold group-hover:text-white transition">{b.blind} <span className="text-xs text-gray-500 font-normal">({b.buyIn})</span></span>
+                                     <input type="checkbox" className="w-4 h-4 rounded bg-gray-900 border-gray-600 accent-[#D8B673] cursor-pointer" checked={isVisible} onChange={(e) => {
+                                           const newPresets = {...weeklyPresets};
+                                           newPresets[editDay] = {...newPresets[editDay], [b.prefix]: e.target.checked};
+                                           updateWeeklyPresets(newPresets);
+                                       }} />
+                                  </label>
+                               );
+                            })}
+                         </div>
+                      </div>
+                   </div>
+                ) : null}
+            </div>
+
+            <div className="p-4 border-t border-gray-600 bg-[#0f172a] shrink-0">
+              <button onClick={onClose} className="w-full bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition">Done</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AdminFastRegisterModal({ visibleBlinds, onClose, onRegister }) {
+      const [entries, setEntries] = useState([{ qNum: '', blindIdx: 0 }]);
+      const [nickName, setNickName] = useState('');
+      const [phone, setPhone] = useState('');
+
+      const handleRegister = () => {
+        const validEntries = entries.filter(e => e.qNum.trim() !== '');
+        if (validEntries.length === 0 || !nickName.trim() || phone.length < 4) return;
+        const mappedEntries = validEntries.map(e => ({ qNum: e.qNum, nickName: nickName, blindObj: visibleBlinds[e.blindIdx] }));
+        onRegister(mappedEntries, phone);
+      };
+
+      const handleQNumChange = (index, val) => {
+        const upperVal = val.toUpperCase().trim();
+        const newEntries = [...entries];
+        newEntries[index].qNum = upperVal;
+        if (upperVal.length >= 1) {
+          const prefix = upperVal.charAt(0);
+          const foundIdx = visibleBlinds.findIndex(b => b.prefix === prefix);
+          if (foundIdx !== -1) newEntries[index].blindIdx = foundIdx;
+        }
+        setEntries(newEntries);
+      };
+
+      const addEntry = () => { if (entries.length < 3) setEntries([...entries, { qNum: '', blindIdx: 0 }]); };
+      const removeEntry = (index) => setEntries(entries.filter((_, i) => i !== index));
+      const isFormValid = entries.some(e => e.qNum.trim() !== '') && nickName.trim() !== '' && phone.length >= 4;
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1e293b] border border-[#475569] p-5 sm:p-6 rounded-xl shadow-2xl max-w-sm w-full flex flex-col max-h-[90vh]">
+            <h3 className="text-lg font-bold text-white mb-4 border-b border-gray-600 pb-2 text-[#D8B673] shrink-0">⚡ Admin Fast Registration</h3>
+            <div className="overflow-y-auto custom-scrollbar pr-1 mb-4 space-y-4">
+              <div className="space-y-4">
+                  {entries.map((entry, index) => (
+                    <div key={index} className="p-3 bg-black/40 border border-gray-700 rounded-lg relative space-y-3">
+                      {index > 0 ? <button onClick={() => removeEntry(index)} className="absolute top-2 right-2 text-red-500 text-xs font-bold hover:text-red-400 bg-red-900/20 px-2 py-1 rounded">Remove</button> : null}
+                      <div>
+                        <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Queue {index + 1}</label>
+                        <input type="text" value={entry.qNum} onChange={e => handleQNumChange(index, e.target.value)} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white uppercase focus:border-[#D8B673] outline-none" placeholder="e.g. A001" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Select Blind</label>
+                        <select value={entry.blindIdx} onChange={e => { const n = [...entries]; n[index].blindIdx = Number(e.target.value); setEntries(n); }} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none">
+                          {visibleBlinds.map((b, i) => <option key={b.prefix} value={i}>{b.prefix} - {b.blind} ({b.buyIn})</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                  {entries.length < 3 ? <button onClick={addEntry} className="w-full py-2 border border-dashed border-gray-600 text-gray-400 rounded-lg hover:bg-gray-800 hover:text-white transition text-xs font-bold">+ Add Another Blinds</button> : null}
+              </div>
+              <div className="pt-2 border-t border-gray-700 space-y-3">
+                <div>
+                  <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Nick Name (Applies to all)</label>
+                  <input type="text" value={nickName} onChange={e => setNickName(e.target.value)} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none" placeholder="e.g. John" />
+                </div>
+                <div>
+                  <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Phone (Last 4 Digits)</label>
+                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none" placeholder="e.g. 4263" />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={onClose} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2.5 rounded transition">Cancel</button>
+              <button onClick={handleRegister} disabled={!isFormValid} className="flex-1 bg-[#d8b46e] disabled:opacity-50 hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition">Register</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AdminResetModal({ onClose, onReset }) {
+      const [clearQueues, setClearQueues] = useState(true);
+      const [clearSeats, setClearSeats] = useState(false);
+      const [clearHistory, setClearHistory] = useState(false);
+      const [pass, setPass] = useState('');
+      const [error, setError] = useState('');
+
+      const handleConfirm = () => {
+        if (pass !== ADMIN_PASSWORD) return setError('Invalid Supervisor Password');
+        if (!clearQueues && !clearSeats && !clearHistory) return setError('Please select at least one option to reset.');
+        onReset({ clearQueues, clearSeats, clearHistory });
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1e293b] border border-red-900/50 p-5 sm:p-6 rounded-xl shadow-2xl max-w-sm w-full flex flex-col">
+            <h3 className="text-lg font-bold text-red-400 mb-4 border-b border-gray-600 pb-2 shrink-0">⚠️ Advanced Reset</h3>
+            <div className="space-y-3 mb-6">
+              <p className="text-sm text-gray-300 mb-2">Select the data you wish to clear:</p>
+              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white/5 rounded border border-[#334155] transition-colors">
+                <input type="checkbox" className="w-5 h-5 rounded" checked={clearQueues} onChange={(e) => setClearQueues(e.target.checked)} />
+                <div><span className="text-gray-200 font-bold text-sm block">Active Queue List</span><span className="text-gray-500 text-xs">Clears all waiting/called queues.</span></div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white/5 rounded border border-[#334155] transition-colors">
+                <input type="checkbox" className="w-5 h-5 rounded" checked={clearSeats} onChange={(e) => setClearSeats(e.target.checked)} />
+                <div><span className="text-gray-200 font-bold text-sm block">All Tables & Seats</span><span className="text-gray-500 text-xs">Removes all players currently seated.</span></div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white/5 rounded border border-red-900/30 transition-colors">
+                <input type="checkbox" className="w-5 h-5 rounded accent-red-600" checked={clearHistory} onChange={(e) => setClearHistory(e.target.checked)} />
+                <div><span className="text-red-400 font-bold text-sm block">History & Logs (New Day)</span><span className="text-red-300/70 text-xs">Wipes queue history, PML logs, and penalties.</span></div>
+              </label>
+            </div>
+            <div className="mb-6">
+               <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-1 block">Supervisor Password</label>
+               <input type="password" value={pass} onChange={e => { setPass(e.target.value); setError(''); }} className="w-full bg-black border border-gray-600 rounded p-2.5 text-white focus:border-red-500 outline-none" placeholder="Enter Admin Password" />
+               {error ? <p className="text-red-400 text-xs mt-1 font-bold">{error}</p> : null}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={onClose} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2.5 rounded transition">Cancel</button>
+              <button onClick={handleConfirm} className="flex-1 bg-red-700 hover:bg-red-600 text-white font-bold py-2.5 rounded transition">Execute Reset</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function GuestSetupForm({ onSubmit, visibleBlinds, dialogFn, requireMemberInfo }) {
+      const [entries, setEntries] = useState([{ qNum: '', nickName: '', memberName: '', memberId: '', blindIdx: 0 }]);
+      const [phone, setPhone] = useState('');
+      const [activeCamera, setActiveCamera] = useState(null); 
+      const [isProcessing, setIsProcessing] = useState(false);
+
+      const handleQNumChange = (index, val) => {
+        const upperVal = val.toUpperCase().trim();
+        setEntries(prev => {
+           const next = [...prev];
+           next[index].qNum = upperVal;
+           if (upperVal.length >= 1) {
+              const prefix = upperVal.charAt(0);
+              const blindIndex = visibleBlinds.findIndex(b => b.prefix === prefix);
+              if (blindIndex !== -1) next[index].blindIdx = blindIndex;
+           }
+           return next;
+        });
+      };
+
+      const processCapturedImage = async (base64Data, mimeType, type) => {
+        setActiveCamera(null);
+        setIsProcessing(true);
+        try {
+            if (type === 'ticket') {
+                const prompt = `Extract the queue numbers and the last 4 digits of the phone number from this ticket. The phone number usually looks like 'XXXXXXX1234'. Return ONLY a valid JSON object. Example: {"queues": ["A0050", "B0043"], "phoneLast4": "4263"}`;
+                const schema = { type: "OBJECT", properties: { queues: { type: "ARRAY", items: { type: "STRING" } }, phoneLast4: { type: "STRING" } } };
+                const result = await callGeminiVisionAPI(base64Data, mimeType, prompt, schema);
+                if (result && result.queues && result.queues.length > 0) {
+                    const newEntries = [];
+                    result.queues.slice(0, 3).forEach((qNum) => {
+                        const prefix = qNum.charAt(0).toUpperCase();
+                        const bIdx = visibleBlinds.findIndex(b => b.prefix === prefix);
+                        newEntries.push({
+                           qNum: qNum.toUpperCase(),
+                           nickName: entries[0]?.nickName || '',
+                           memberName: entries[0]?.memberName || '',
+                           memberId: entries[0]?.memberId || '',
+                           blindIdx: bIdx !== -1 ? bIdx : 0
+                        });
+                    });
+                    setEntries(newEntries);
+                }
+                if (result && result.phoneLast4) setPhone(result.phoneLast4);
+            } else if (type === 'card') {
+                const prompt = `Extract the Member Name and 11-digit Member ID from this membership card. Return ONLY a valid JSON object. Example: {"memberName": "JOHN DOE", "memberId": "81860003456"}`;
+                const schema = { type: "OBJECT", properties: { memberName: { type: "STRING" }, memberId: { type: "STRING" } } };
+                const result = await callGeminiVisionAPI(base64Data, mimeType, prompt, schema);
+                if (result && (result.memberName || result.memberId)) {
+                    const firstName = result.memberName ? result.memberName.split(' ')[0] : '';
+                    setEntries(prev => prev.map(entry => ({
+                        ...entry,
+                        memberName: result.memberName || entry.memberName,
+                        memberId: result.memberId || entry.memberId,
+                        nickName: entry.nickName || firstName 
+                    })));
+                }
+            }
+        } catch (error) {
+            dialogFn({ type: 'alert', title: 'Scan Failed', message: 'Could not automatically read the information.', onConfirm: () => dialogFn(null) });
+        } finally {
+            setIsProcessing(false);
+        }
+      };
+
+      const addEntry = () => {
+        if (entries.length < 3) {
+          const prevNickName = entries[0].nickName; 
+          const prevMemberName = entries[0].memberName;
+          const prevMemberId = entries[0].memberId;
+          let nextBlindIdx = 0;
+          if (entries.length === 1 && visibleBlinds.length > 1) nextBlindIdx = 1; 
+          if (entries.length === 2 && visibleBlinds.length > 2) nextBlindIdx = 2; 
+          setEntries([...entries, { qNum: '', nickName: prevNickName, memberName: prevMemberName, memberId: prevMemberId, blindIdx: nextBlindIdx }]);
+        }
+      };
+
+      const removeEntry = (index) => setEntries(entries.filter((_, i) => i !== index));
+      const updateEntry = (index, field, value) => {
+        setEntries(prev => { const next = [...prev]; next[index][field] = value; return next; });
+      };
+
+      const isValidEntry = (e) => {
+        if (!e.qNum.trim() || !e.nickName.trim()) return false;
+        if (requireMemberInfo && (!e.memberName.trim() || !e.memberId.trim())) return false;
+        return true;
+      };
+
+      const handleSubmit = () => {
+        const validEntries = entries.filter(isValidEntry);
+        if (validEntries.length > 0 && phone.length >= 4) {
+          const mapped = validEntries.map(e => ({ qNum: e.qNum, nickName: e.nickName, memberName: e.memberName, memberId: e.memberId, blindObj: visibleBlinds[e.blindIdx] }));
+          onSubmit(mapped, phone);
+        } else dialogFn({ type: 'alert', title: 'Error', message: 'Please fill all required fields.', onConfirm: () => dialogFn(null) });
+      };
+
+      const isFormValid = entries.some(isValidEntry) && phone.length >= 4;
+
+      return (
+        <div className="max-w-md mx-auto mt-4 sm:mt-10 bg-gray-900 p-5 sm:p-8 rounded-xl border border-gray-800 shadow-2xl relative">
+          {activeCamera ? <CameraScanner title={activeCamera === 'ticket' ? "Scan Queue Ticket" : "Scan Member Card"} type={activeCamera} onClose={() => setActiveCamera(null)} onCapture={(base64, mimeType) => processCapturedImage(base64, mimeType, activeCamera)} /> : null}
+          {isProcessing ? (
+             <div className="absolute inset-0 bg-black/80 z-[60] flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
+                <div className="ai-spinner mb-4"></div>
+                <p className="text-[#D8B673] font-bold tracking-widest text-sm uppercase text-center px-4">Analyzing Image...</p>
+             </div>
+          ) : null}
+
+          <h2 className="text-xl sm:text-2xl font-bold mb-2 text-center text-[#D8B673]">Resort Poker Hub - Registration</h2>
+          <p className="text-xs sm:text-sm text-gray-400 text-center mb-6">Enter up to 3 queues from your ticket(s).</p>
+          
+          {requireMemberInfo ? (
+            <div className="flex gap-2 mb-6">
+              <button onClick={() => setActiveCamera('ticket')} className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg"><Icons.Camera /><span className="text-[10px] sm:text-xs font-bold">Scan Queue Ticket</span></button>
+              <button onClick={() => setActiveCamera('card')} className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg"><Icons.Camera /><span className="text-[10px] sm:text-xs font-bold">Scan Member Card</span></button>
+            </div>
+          ) : null}
+
+          <div className="space-y-4">
+            {entries.map((entry, index) => (
+              <div key={index} className="p-3 sm:p-4 bg-black border border-gray-700 rounded-lg relative">
+                {index > 0 ? <button onClick={() => removeEntry(index)} className="absolute top-2 right-2 text-red-500 text-xs font-bold hover:text-red-400 bg-red-900/20 px-2 py-1 rounded">Remove</button> : null}
+                <div className="mb-3 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">Queue {index + 1}</label>
+                    <input type="text" value={entry.qNum} onChange={(e) => handleQNumChange(index, e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-[#D8B673] font-bold uppercase tracking-wider" placeholder="e.g. D0003" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">Select Blind</label>
+                    <select value={entry.blindIdx} onChange={(e) => updateEntry(index, 'blindIdx', Number(e.target.value))} className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-[#D8B673]">
+                      {visibleBlinds.map((b, idx) => <option key={b.prefix} value={idx}>{b.prefix} - {b.blind} (Buy-in: {b.buyIn})</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">Nick Name</label>
+                  <input type="text" value={entry.nickName} onChange={(e) => updateEntry(index, 'nickName', e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-[#D8B673] font-bold tracking-wider" placeholder="e.g. John" />
+                </div>
+                {requireMemberInfo ? (
+                  <div className="mb-3 grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">Member ID</label>
+                      <input type="text" value={entry.memberId} onChange={(e) => updateEntry(index, 'memberId', e.target.value.replace(/\D/g, '').substring(0,11))} maxLength={11} className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-[#D8B673] tracking-wider" placeholder="11 Digits" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">Member Name</label>
+                      <input type="text" value={entry.memberName} onChange={(e) => updateEntry(index, 'memberName', e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-[#D8B673] tracking-wider" placeholder="Full Name" />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            {entries.length < 3 ? <button onClick={addEntry} className="w-full py-3 border border-dashed border-gray-600 text-gray-400 rounded-lg hover:bg-gray-800 hover:text-white transition text-sm font-bold">+ Add Another Blinds</button> : null}
+            <div className="pt-2">
+              <label className="block text-xs sm:text-sm text-gray-300 mb-1 font-medium">Phone Number Last 4 Digits (Password)</label>
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} className="w-full bg-black border border-gray-700 rounded-lg p-2.5 text-white text-base focus:outline-none focus:border-[#D8B673] tracking-wider" placeholder="e.g. 4263" />
+            </div>
+            <button onClick={handleSubmit} disabled={!isFormValid} className="w-full mt-6 bg-[#D8B673] hover:bg-[#c29e5a] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-3 rounded-lg transition text-base">Track My Status</button>
+          </div>
+        </div>
+      );
+    }
+
+    function ReceiptScreen({ queueIds, phone, date, onContinue }) {
+      const dateStr = date ? new Date(date).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+      const maskedPhone = phone.length > 4 ? 'XXXXXXXX' + phone.slice(-4) : 'XXXX' + phone;
+
+      return (
+        <div className="max-w-lg mx-auto mt-4 sm:mt-10 px-2 sm:px-0">
+          <div className="bg-white text-gray-900 p-6 sm:p-10 rounded-sm shadow-2xl text-center border-t-8 border-[#D8B673]">
+            <p className="text-base sm:text-lg font-medium text-gray-700 mb-4 sm:mb-6 leading-relaxed">
+              You have successfully registered<br/>at {dateStr} with the<br/>following queue number(s):
+            </p>
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-black mb-4 sm:mb-6 tracking-tight text-black flex flex-col gap-2">
+              {queueIds.map(id => <span key={id}>{id}</span>)}
+            </h1>
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-6 sm:mb-8 text-black tracking-widest">{maskedPhone}</h2>
+            <p className="text-gray-500 font-medium text-xs sm:text-sm leading-relaxed max-w-xs mx-auto">
+              In accordance to PDPA Guidelines, contact details strictly for registration only.
+            </p>
+          </div>
+          <button onClick={onContinue} className="w-full mt-4 sm:mt-6 bg-[#D8B673] text-black font-bold py-4 rounded-lg hover:bg-[#c29e5a] transition text-base sm:text-lg">View Live Dashboard</button>
+        </div>
+      );
+    }
+
+    function AdminLogin({ onLogin, onCancel }) {
+      const [pass, setPass] = useState('');
+      const [error, setError] = useState('');
+
+      const handleLogin = () => {
+        if (pass === ADMIN_PASSWORD) onLogin();
+        else setError('Invalid Password');
+      };
+
+      return (
+        <div className="max-w-sm mx-auto mt-10 sm:mt-20 bg-gray-900 p-5 sm:p-6 rounded-xl border border-gray-700 shadow-2xl">
+          <h2 className="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2 text-[#D8B673]"><Icons.Shield/> Resort Poker Hub - Admin</h2>
+          <input type="password" value={pass} onChange={(e) => { setPass(e.target.value); setError(''); }} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} className="w-full bg-black border border-gray-700 rounded-lg p-3 text-white text-base sm:text-lg focus:outline-none focus:border-[#D8B673] mb-2" placeholder="Enter Password" />
+          {error ? <p className="text-red-400 text-sm mb-4">{error}</p> : null}
+          <div className="flex flex-col sm:flex-row gap-2 mt-4">
+            <button onClick={handleLogin} className="flex-1 bg-[#D8B673] hover:bg-[#c29e5a] text-black font-bold py-3 rounded-lg transition">Login</button>
+            <button onClick={onCancel} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition border border-gray-600">Cancel</button>
+          </div>
+        </div>
+      );
+    }
+
+    function GuestStatusPanel({ queueId, queue, onReply, setDialog }) {
+      const alertedNext = useRef(false);
+      const [timeLeft, setTimeLeft] = useState('');
+
+      useEffect(() => {
+        if (queue?.status === 'Next' && !alertedNext.current) {
+          setDialog({
+             type: 'alert',
+             title: 'You are NEXT!',
+             message: `Your queue number ${queue.id} is next! Please get ready to proceed to the Counter.`,
+             onConfirm: () => setDialog(null)
+          });
+          alertedNext.current = true;
+        }
+        if (queue?.status !== 'Next') alertedNext.current = false;
+
+        if (queue?.status === 'Calling' && queue?.callingStartedAt) {
+          const interval = setInterval(() => {
+            const elapsed = Date.now() - queue.callingStartedAt;
+            const remaining = Math.max(0, CALLING_TIME_LIMIT_MS - elapsed);
+            setTimeLeft(`${Math.floor(remaining / 60000)}:${Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0')}`);
+          }, 1000);
+          return () => clearInterval(interval);
+        }
+      }, [queue?.status, queue?.id, queue?.callingStartedAt, setDialog]);
+
+      if (!queue) {
+        return (
+          <div className="bg-gray-900 border border-[#D8B673] p-6 sm:p-8 rounded-xl text-center shadow-lg">
+            <h3 className="text-lg sm:text-xl font-black text-[#D8B673] uppercase tracking-widest mb-1">Queue {queueId} Completed</h3>
+            <p className="text-gray-300 font-medium text-xs sm:text-sm">This queue number was over or service completed.</p>
+          </div>
+        );
+      }
+
+      if (queue.status === "Time's Up") {
+        return (
+          <div className="bg-red-900/30 border border-red-500 p-5 sm:p-6 rounded-xl text-center shadow-lg">
+            <h3 className="text-xl sm:text-2xl font-black text-red-400 uppercase tracking-widest">Time's Up</h3>
+            <p className="text-red-300 mt-2 font-medium text-sm">Your 10-minute response window for <b>{queue.id}</b> has expired. Please see the counter.</p>
+          </div>
+        );
+      }
+
+      const getStatusColor = () => {
+        switch(queue.status) {
+          case 'Pending': return 'bg-gray-800 border-gray-600 text-gray-300';
+          case 'Confirmed': return 'bg-blue-900/40 border-blue-500 text-blue-400';
+          case 'Next': return 'bg-purple-900/40 border-purple-500 text-purple-400';
+          case 'Calling': return 'bg-red-900/40 border-red-500 text-red-400';
+          case 'Arrived': return 'bg-green-900/40 border-green-500 text-green-400';
+          default: return 'bg-gray-800 border-gray-600';
+        }
+      };
+
+      return (
+        <div className={`p-5 sm:p-6 rounded-xl border shadow-lg ${getStatusColor()} transition-colors duration-500`}>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center flex-wrap gap-4">
+            <div>
+              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest opacity-70">Your Queue Number</p>
+              <h2 className="text-3xl sm:text-4xl font-black mt-1 text-white">{queue.id} <span className="text-lg sm:text-xl font-normal opacity-80 ml-2">({queue.nickName})</span></h2>
+              <p className="text-xs sm:text-sm mt-1 font-medium">{queue.blindObj.blind}</p>
+            </div>
+            <div className="text-left sm:text-right mt-2 sm:mt-0">
+              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest opacity-70">Live Status</p>
+              <h3 className={`text-xl sm:text-2xl font-bold mt-1 ${queue.status === 'Calling' ? 'text-red-400 animate-pulse' : 'text-white'}`}>
+                {queue.status === 'Pending' && 'Waiting Confirm'}
+                {queue.status === 'Confirmed' && 'Confirmed - In Queue'}
+                {queue.status === 'Next' && 'Next to be your turn!'}
+                {queue.status === 'Calling' && 'Calling! Please Respond.'}
+                {queue.status === 'Arrived' && 'Arrived - Proceed to Counter'}
+              </h3>
+            </div>
+          </div>
+
+          {queue.status === 'Calling' ? (
+            <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-red-500/30">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-center gap-2 sm:gap-3 text-red-400">
+                  <div className="animate-pulse"><Icons.Clock /></div>
+                  <span className="text-base sm:text-lg font-bold">Action Required: {timeLeft}</span>
+                </div>
+                
+                {!queue.guestReply ? (
+                  <div className="flex gap-2 w-full md:w-auto">
+                    <select onChange={(e) => { if(e.target.value) onReply(e.target.value); }} className="bg-black text-white border border-red-500 p-3 rounded-lg flex-grow md:w-64 focus:outline-none focus:ring-2 focus:ring-red-500 font-medium text-base sm:text-lg" defaultValue="">
+                      <option value="" disabled>Select your response...</option>
+                      <option value="On the way">On the way</option>
+                      <option value="Need more Time">Need more Time</option>
+                      <option value="Cancel queue">Cancel queue</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="bg-black/50 px-4 sm:px-5 py-2 sm:py-3 rounded-lg border border-red-500/50 flex flex-col items-start md:items-end w-full md:w-auto">
+                    <div>
+                      <span className="opacity-80 text-xs sm:text-sm text-gray-300">You replied:</span> 
+                      <strong className="ml-2 text-white text-base sm:text-lg">{queue.guestReply}</strong>
+                    </div>
+                    {queue.adminReply ? <p className="mt-1 text-xs sm:text-sm text-green-400 font-bold">Counter: {queue.adminReply}</p> : null}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+    // --- Main App Component ---
+    function App() {
+      const [view, setView] = useState('guest-setup'); 
+      const [guestQueueIds, setGuestQueueIds] = useState([]);
+      const [guestPhone, setGuestPhone] = useState('');
+      const [justRegisteredDate, setJustRegisteredDate] = useState(null);
+      const [dialog, setDialog] = useState(null); 
+      const [now, setNow] = useState(new Date());
+      const [isSyncing, setIsSyncing] = useState(false);
+      
+      // React State
+      const [queues, setQueues] = useState([]);
+      const [history, setHistory] = useState([]);
+      const [pmlData, setPmlData] = useState([]);
+      const [pmlHistory, setPmlHistory] = useState([]);
+      const [tables, setTables] = useState([]);
+      const [blindVis, setBlindVis] = useState({}); 
+      const [adminName, setAdminName] = useState('Poker Supervisor/ EMPID');
+      const [penalties, setPenalties] = useState([]);
+      const [requireConfirm, setRequireConfirm] = useState(false);
+      const [requireMemberInfo, setRequireMemberInfo] = useState(false);
+      const [autoBlindEnabled, setAutoBlindEnabled] = useState(true);
+      const [weeklyPresets, setWeeklyPresets] = useState(DEFAULT_BLIND_PRESETS);
+
+      // Cloud State Handlers
+      const localLastModified = useRef(0);
+      const fullStateRef = useRef({
+        queues: [], history: [], pmlData: [], pmlHistory: [], tables: [],
+        blindVis: {}, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS,
+        autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false
+      });
+
+      // Admin Layout States
+      const [adminLayoutMode, setAdminLayoutMode] = useState('both'); 
+      const [isAdminControlsExpanded, setIsAdminControlsExpanded] = useState(false); 
+      const [expandedQId, setExpandedQId] = useState(null);
+      const [expandedSeat, setExpandedSeat] = useState(null); 
+      const [blindModalOpen, setBlindModalOpen] = useState(false);
+      const [tableModalOpen, setTableModalOpen] = useState(false);
+      const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+      const [selectedRestores, setSelectedRestores] = useState([]);
+      const [showLiveBoard, setShowLiveBoard] = useState(false); 
+      const [collapsedBlinds, setCollapsedBlinds] = useState({});
+      const [highlightedPhone, setHighlightedPhone] = useState(null);
+      const [adminRegisterOpen, setAdminRegisterOpen] = useState(false);
+      const [resetModalOpen, setResetModalOpen] = useState(false);
+      const [showNewDayReminder, setShowNewDayReminder] = useState(false);
+
+      const updateCloudState = async (updates) => {
+        const newState = { ...fullStateRef.current, ...updates, lastModified: Date.now() };
+        fullStateRef.current = newState;
+        localLastModified.current = newState.lastModified;
+        
+        if (updates.queues !== undefined) setQueues(updates.queues);
+        if (updates.history !== undefined) setHistory(updates.history);
+        if (updates.tables !== undefined) setTables(updates.tables);
+        if (updates.blindVis !== undefined) setBlindVis(updates.blindVis);
+        if (updates.pmlData !== undefined) setPmlData(updates.pmlData);
+        if (updates.pmlHistory !== undefined) setPmlHistory(updates.pmlHistory);
+        if (updates.penalties !== undefined) setPenalties(updates.penalties);
+        if (updates.weeklyPresets !== undefined) setWeeklyPresets(updates.weeklyPresets);
+        if (updates.autoBlindEnabled !== undefined) setAutoBlindEnabled(updates.autoBlindEnabled);
+        if (updates.adminName !== undefined) setAdminName(updates.adminName);
+        if (updates.requireConfirm !== undefined) setRequireConfirm(updates.requireConfirm);
+        if (updates.requireMemberInfo !== undefined) setRequireMemberInfo(updates.requireMemberInfo);
+
+        localStorage.setItem('poker_cloud_backup', JSON.stringify(newState));
+
+        try {
+          setIsSyncing(true);
+          await fetch(JSONBIN_URL, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_MASTER_KEY },
+            body: JSON.stringify(newState)
+          });
+        } catch (err) {
+          console.error("Cloud sync failed:", err);
+        } finally {
+          setIsSyncing(false);
+        }
+      };
+
+      // Load initial data and Smart Polling
+      useEffect(() => {
+        const timerNow = setInterval(() => setNow(new Date()), 1000);
+
+        const fetchCloudData = async () => {
+          try {
+            const res = await fetch(`${JSONBIN_URL}/latest`, { 
+              headers: { 'X-Master-Key': JSONBIN_MASTER_KEY, 'X-Bin-Meta': 'false', 'Cache-Control': 'no-cache' }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              
+              if (!data.tables || data.tables.length === 0) {
+                // Initialize Defaults on first run
+                const emptyPml = Array.from({length: 30}, () => ({ table: '', seat: '', blind: '', player: '', reqTime: '', status: '', movedTime: '', remark: '' }));
+                const initialTables = Array.from({ length: 12 }).map((_, i) => ({ id: `E05-NL${(i + 1).toString().padStart(2, '0')}`, blindPrefix: '', isOpen: i < 4, seats: Array(10).fill(null) }));
+                const initialVis = {};
+                BLINDS.forEach(b => initialVis[b.prefix] = (b.prefix !== 'D' && b.prefix !== 'G'));
+
+                updateCloudState({ queues: [], history: [], pmlData: emptyPml, pmlHistory: [], tables: initialTables, blindVis: initialVis, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS, autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false });
+                return;
+              }
+
+              if (data.lastModified > localLastModified.current) {
+                localLastModified.current = data.lastModified;
+                fullStateRef.current = { ...fullStateRef.current, ...data };
+                
+                setQueues(data.queues || []);
+                setHistory(data.history || []);
+                setPmlData(data.pmlData || []);
+                setPmlHistory(data.pmlHistory || []);
+                setTables(data.tables || []);
+                setBlindVis(data.blindVis || {});
+                setPenalties(data.penalties || []);
+                if (data.weeklyPresets) setWeeklyPresets(data.weeklyPresets);
+                if (data.autoBlindEnabled !== undefined) setAutoBlindEnabled(data.autoBlindEnabled);
+                if (data.adminName) setAdminName(data.adminName);
+                if (data.requireConfirm !== undefined) setRequireConfirm(data.requireConfirm);
+                if (data.requireMemberInfo !== undefined) setRequireMemberInfo(data.requireMemberInfo);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to fetch cloud data:", err);
+            const localBackup = JSON.parse(localStorage.getItem('poker_cloud_backup'));
+            if (localBackup && localBackup.lastModified > localLastModified.current) {
+                // Fallback to local
+                localLastModified.current = localBackup.lastModified;
+                fullStateRef.current = { ...fullStateRef.current, ...localBackup };
+                setQueues(localBackup.queues || []);
+                setHistory(localBackup.history || []);
+                setTables(localBackup.tables || []);
+                // etc...
+            }
+          }
+        };
+
+        fetchCloudData(); // Initial load
+        const syncInterval = setInterval(fetchCloudData, 3000); // Smart Poll every 3 seconds
+
+        const checkNewDay = () => {
+            const currentDate = new Date();
+            const tradingDate = new Date(currentDate);
+            if (tradingDate.getHours() < 4) {
+                tradingDate.setDate(tradingDate.getDate() - 1);
+            }
+            const dateString = tradingDate.toISOString().split('T')[0];
+            const savedDate = localStorage.getItem('poker_trading_date_cloud');
+
+            if (savedDate !== dateString) {
+                setShowNewDayReminder(true);
+                localStorage.setItem('poker_trading_date_cloud', dateString);
+
+                const dayOfWeek = tradingDate.getDay();
+                if (fullStateRef.current.autoBlindEnabled) {
+                    const todayPreset = fullStateRef.current.weeklyPresets[dayOfWeek];
+                    let newVis = { ...fullStateRef.current.blindVis };
+                    BLINDS.forEach(b => {
+                        newVis[b.prefix] = todayPreset[b.prefix] !== false; 
+                    });
+                    updateCloudState({ blindVis: newVis });
+                }
+            }
+        };
+
+        checkNewDay();
+        const timerNewDay = setInterval(checkNewDay, 60000);
+
+        const timer = setInterval(() => {
+          setQueues(currentQueues => {
+            let modified = false;
+            const currentTimeMs = Date.now();
+            const updated = currentQueues.map(q => {
+              if (q.status === 'Calling' && q.callingStartedAt) {
+                const elapsed = currentTimeMs - q.callingStartedAt;
+                if (elapsed >= CALLING_TIME_LIMIT_MS && !q.guestReply) {
+                  modified = true;
+                  return { ...q, status: "Time's Up" };
+                }
+              }
+              return q;
+            });
+            if (modified) {
+              updateCloudState({ queues: updated });
+              return updated;
+            }
+            return currentQueues;
+          });
+        }, 1000);
+
+        const handleBeforeUnload = (e) => {
+          if (history.length > 0 || pmlHistory.length > 0) {
+            triggerDownloads(true);
+          }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+          window.removeEventListener('beforeunload', handleBeforeUnload);
+          clearInterval(timer);
+          clearInterval(timerNow);
+          clearInterval(timerNewDay);
+          clearInterval(syncInterval);
+        };
+      }, []);
+
+      const visibleBlindsList = BLINDS.filter(b => blindVis[b.prefix] !== false);
+
+      const seatedPhones = new Set();
+      tables.forEach(t => {
+          t.seats.forEach(s => {
+              if (s) seatedPhones.add(s.phone);
+          });
+      });
+
+      const handlePmlPenalty = (pmlIndex, row, hours) => {
+          const playerStr = row.player;
+          if (!playerStr || playerStr.trim() === '') {
+              setDialog({ type: 'alert', title: 'Action Denied', message: 'Please enter a Player Name / Queue ID in the row first before applying a penalty.', onConfirm: () => setDialog(null) });
+              return;
+          }
+          
+          let qId = '';
+          let nickName = '';
+          const match = playerStr.match(/^([A-Z0-9]+)(?:\s*\(([^)]+)\))?/i); 
+          if (match) { qId = match[1].toUpperCase(); nickName = match[2] ? match[2].trim() : ''; } 
+          else { nickName = playerStr.trim(); }
+
+          const activeQueue = queues.find(q => (qId && q.id === qId) || (nickName && q.nickName.toUpperCase() === nickName.toUpperCase()));
+
+          const applyPenaltyAndPml = (empid) => {
+              const guest = activeQueue || history.find(q => q.id === qId);
+              const phone = guest ? guest.phone : null;
+              const finalNick = guest ? guest.nickName : nickName;
+              const unbanTime = Date.now() + (hours * 60 * 60 * 1000);
+              
+              const newPenalty = { phone, qId, nickName: finalNick, unbanTime };
+              const updatedPenalties = penalties.filter(p => p.qId !== qId && (phone ? p.phone !== phone : true));
+              updatedPenalties.push(newPenalty);
+
+              let updatedQueues = [...queues];
+              let updatedHistory = [...history];
+
+              if (activeQueue) {
+                  const endedAt = Date.now();
+                  const durationMins = ((endedAt - activeQueue.createdAt) / 60000).toFixed(2);
+                  const historyRecord = { ...activeQueue, status: 'Canceled (Penalty)', endedAt, duration: `${durationMins} mins`, adminId: adminName };
+                  updatedHistory.push(historyRecord);
+                  updatedQueues = queues.filter(item => item.id !== activeQueue.id);
+              }
+
+              const currentTime = new Date();
+              const unbanTimeObj = new Date(unbanTime);
+              const currentTimeStr = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+              const unbanTimeStr = unbanTimeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+              
+              let newRemark = `Cancel ${hours === 1 ? '1 hr' : '2 hrs'} cannot queue (Until ${unbanTimeStr}) - Auth: ${empid}`;
+              
+              const newPmlData = [...pmlData];
+              newPmlData[pmlIndex] = { ...newPmlData[pmlIndex], remark: newRemark, status: 'Cancel', movedTime: currentTimeStr };
+
+              updateCloudState({ penalties: updatedPenalties, queues: updatedQueues, history: updatedHistory, pmlData: newPmlData });
+              setDialog(null);
+          };
+
+          const isWarning = !!activeQueue;
+          setDialog({
+              type: 'prompt',
+              title: isWarning ? 'Active Queue Found & Penalty' : 'Apply Penalty',
+              message: isWarning 
+                  ? `Warning: ${activeQueue.id} (${activeQueue.nickName}) currently has an active queue!\n\nThis will apply a ${hours}-hour ban AND cancel their active queue.\n\nEnter Supervisor EMPID and Password to override:`
+                  : `Apply a ${hours}-hour ban for ${playerStr}?\n\nEnter Supervisor EMPID and Password to verify:`,
+              input: '',
+              inputPlaceholder: 'Supervisor EMPID',
+              inputType: 'text',
+              input2: '',
+              inputPlaceholder2: 'Admin Password',
+              inputType2: 'password',
+              confirmText: isWarning ? 'Override & Cancel' : 'Verify & Apply',
+              confirmStyle: 'danger',
+              onConfirm: () => {
+                  const empid = document.getElementById('dialog-input').value.trim();
+                  const pass = document.getElementById('dialog-input-2').value;
+                  if (!empid) {
+                      setDialog({ type: 'alert', title: 'Error', message: 'Supervisor EMPID is required.', onConfirm: () => setDialog(null) });
+                      return;
+                  }
+                  if (pass === ADMIN_PASSWORD) {
+                      applyPenaltyAndPml(empid);
+                  } else {
+                      setDialog({ type: 'alert', title: 'Error', message: 'Invalid Supervisor Password. Action aborted.', onConfirm: () => setDialog(null) });
+                  }
+              },
+              onCancel: () => setDialog(null)
+          });
+      };
+
+      const handleCheckPmlPenalty = (playerStr, onSuccess, onRevert) => {
+        if (!playerStr) return;
+        let qId = '';
+        let nickName = '';
+        const match = playerStr.match(/^([A-Z0-9]+)(?:\s*\(([^)]+)\))?/i); 
+        if (match) { qId = match[1].toUpperCase(); nickName = match[2] ? match[2].trim().toUpperCase() : ''; } 
+        else { nickName = playerStr.trim().toUpperCase(); }
+
+        const activePenalty = penalties.find(p => {
+            if (p.unbanTime <= Date.now()) return false;
+            const matchQ = p.qId && qId && p.qId === qId;
+            const matchN = p.nickName && nickName && p.nickName.toUpperCase().trim() === nickName;
+            return matchQ || matchN;
+        });
+
+        if (activePenalty) {
+            setDialog({
+                type: 'prompt',
+                inputType: 'password',
+                title: 'Player Restricted',
+                message: `Warning: '${activePenalty.nickName || activePenalty.qId}' was canceled previously and is banned from queuing/transferring until ${new Date(activePenalty.unbanTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}.\n\nSupervisor Override Password to allow PML entry:`,
+                input: '',
+                confirmText: 'Override & Allow',
+                confirmStyle: 'danger',
+                onConfirm: () => {
+                    const val = document.getElementById('dialog-input').value;
+                    if (val === ADMIN_PASSWORD) {
+                        const updated = penalties.filter(p => p !== activePenalty);
+                        updateCloudState({ penalties: updated });
+                        setDialog(null);
+                        if (onSuccess) onSuccess();
+                    } else {
+                        setDialog({ type: 'alert', title: 'Error', message: 'Invalid Supervisor Password. Entry reverted.', onConfirm: () => { setDialog(null); if (onRevert) onRevert(); } });
+                    }
+                },
+                onCancel: () => { setDialog(null); if (onRevert) onRevert(); }
+            });
+        } else {
+            if (onSuccess) onSuccess();
+        }
+      };
+
+      const triggerDownloads = (isSilent = false) => {
+        let exported = false;
+        const qData = [];
+        const pmlDataExport = [];
+        const tableDataExport = [];
+
+        tableDataExport.push(['Table ID', 'Blind Prefix', 'Status', 'Seat 1', 'Seat 2', 'Seat 3', 'Seat 4', 'Seat 5', 'Seat 6', 'Seat 7', 'Seat 8', 'Seat 9', 'Spare']);
+        tables.forEach(t => {
+            const row = [t.id, t.blindPrefix || 'None', t.isOpen ? 'Open' : 'Closed'];
+            t.seats.forEach(s => row.push(s ? `${s.id} (${s.nickName})` : 'Empty'));
+            tableDataExport.push(row);
+        });
+
+        const qHeaders = ['Queue Number', 'Nick Name', 'Member Name', 'Member ID', 'Phone', 'Blind', 'Status', 'Register Time', 'Confirm Time', 'End/Seat Time', 'Duration', 'Guest Reply', 'Counter Reply', 'Admin ID'];
+        qData.push(qHeaders);
+
+        queues.forEach(q => {
+            qData.push([ q.id, `"${q.nickName || ''}"`, `"${q.memberName || ''}"`, `"${q.memberId || ''}"`, q.phone, `"${q.blindObj?.blind || ''}"`, q.status, `"${new Date(q.createdAt).toLocaleString()}"`, q.confirmedAt ? `"${new Date(q.confirmedAt).toLocaleString()}"` : '"N/A"', '"Active"', '"Active"', `"${q.guestReply || 'N/A'}"`, `"${q.adminReply || 'N/A'}"`, `"${q.adminId || ''}"` ]);
+        });
+
+        tables.forEach(t => {
+            t.seats.forEach((s, idx) => {
+                if (s) {
+                    qData.push([ s.id, `"${s.nickName || ''}"`, `"${s.memberName || ''}"`, `"${s.memberId || ''}"`, s.phone, `"${s.blindObj?.blind || ''}"`, `"Seated at ${t.id} (Seat ${idx < 9 ? idx + 1 : 'Spare'})"`, `"${new Date(s.createdAt).toLocaleString()}"`, s.confirmedAt ? `"${new Date(s.confirmedAt).toLocaleString()}"` : '"N/A"', s.seatedAt ? `"${new Date(s.seatedAt).toLocaleString()}"` : '"N/A"', '"Seated"', `"${s.guestReply || 'N/A'}"`, `"${s.adminReply || 'N/A'}"`, `"${s.adminId || ''}"` ]);
+                }
+            });
+        });
+
+        history.forEach(h => {
+            qData.push([ h.id, `"${h.nickName || ''}"`, `"${h.memberName || ''}"`, `"${h.memberId || ''}"`, h.phone, `"${h.blindObj?.blind || ''}"`, h.status, `"${new Date(h.createdAt).toLocaleString()}"`, h.confirmedAt ? `"${new Date(h.confirmedAt).toLocaleString()}"` : '"N/A"', h.endedAt ? `"${new Date(h.endedAt).toLocaleString()}"` : '"N/A"', h.duration || '"N/A"', `"${h.guestReply || 'N/A'}"`, `"${h.adminReply || 'N/A'}"`, `"${h.adminId || ''}"` ]);
+        });
+
+        const pHeaders = ['Original Row #', 'Table', 'Seat', 'Blinds', 'Player Name / Queue', 'Request Time', 'Status', 'Moved Time', 'Remark', 'Cleared At', 'Admin ID'];
+        pmlDataExport.push(pHeaders);
+
+        pmlData.forEach((p, i) => {
+            if (p.player || p.table || p.blind || p.status) {
+                pmlDataExport.push([ i + 1, p.table, p.seat || '', p.blind, `"${p.player || ''}"`, p.reqTime, p.status, p.movedTime, `"${p.remark || ''}"`, '"Active"', `"${p.adminId || ''}"` ]);
+            }
+        });
+
+        pmlHistory.forEach(p => {
+            pmlDataExport.push([ p.originalIndex + 1, p.table, p.seat || '', p.blind, `"${p.player || ''}"`, p.reqTime, p.status, p.movedTime, `"${p.remark || ''}"`, p.deletedAt ? `"${new Date(p.deletedAt).toLocaleString()}"` : '"N/A"', `"${p.adminId || ''}"` ]);
+        });
+
+        const rawState = { queues, history, pmlData, pmlHistory, tables, blindVis, penalties, weeklyPresets, autoBlindEnabled };
+        const rawDataExport = [
+            ['WARNING', 'DO NOT EDIT THIS SHEET. IT IS USED FOR SYSTEM RECOVERY.'],
+            ['DATA', JSON.stringify(rawState)]
+        ];
+
+        if (qData.length > 1 || pmlDataExport.length > 1 || tableDataExport.length > 1) {
+            const wb = XLSX.utils.book_new();
+            const wsTables = XLSX.utils.aoa_to_sheet(tableDataExport);
+            XLSX.utils.book_append_sheet(wb, wsTables, "Tables & Seats");
+            const wsQueues = XLSX.utils.aoa_to_sheet(qData);
+            XLSX.utils.book_append_sheet(wb, wsQueues, "Queue History");
+            const wsPml = XLSX.utils.aoa_to_sheet(pmlDataExport);
+            XLSX.utils.book_append_sheet(wb, wsPml, "Movement History");
+            const wsRaw = XLSX.utils.aoa_to_sheet(rawDataExport);
+            XLSX.utils.book_append_sheet(wb, wsRaw, "RawData");
+
+            XLSX.writeFile(wb, `RWS_Poker_Records_${new Date().toISOString().split('T')[0]}.xlsx`);
+            exported = true;
+        }
+
+        if (!exported && isSilent !== true) setDialog({ type: 'alert', title: 'No Data', message: 'No records to export yet.', onConfirm: () => setDialog(null) });
+        else if (exported && isSilent !== true) setDialog({ type: 'alert', title: 'Backup Successful', message: 'Data backup downloaded as an Excel file.', onConfirm: () => setDialog(null) });
+      };
+
+      const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const bstr = evt.target.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                if (!wb.Sheets['RawData']) throw new Error('No Recovery Data found!');
+                
+                const rawDataArray = XLSX.utils.sheet_to_json(wb.Sheets['RawData'], { header: 1 });
+                const jsonRow = rawDataArray.find(row => row[0] === 'DATA');
+                if (!jsonRow || !jsonRow[1]) throw new Error('Recovery data is corrupted or missing.');
+
+                const restoredState = JSON.parse(jsonRow[1]);
+                updateCloudState(restoredState);
+                
+                setDialog({ type: 'alert', title: 'Recovery Successful', message: 'All tables, queues, and PML data have been fully restored and synced to the cloud.', onConfirm: () => setDialog(null) });
+            } catch (error) {
+                setDialog({ type: 'alert', title: 'Recovery Failed', message: error.message, onConfirm: () => setDialog(null) });
+            } finally {
+                e.target.value = '';
+            }
+        };
+        reader.readAsBinaryString(file);
+      };
+
+      const handleAdminExit = () => {
+        if (history.length > 0 || pmlHistory.length > 0 || queues.length > 0) triggerDownloads(true); 
+        setView('guest-setup');
+      };
+
+      const executeLogin = (queueEntries, phone) => {
+        let hasError = false;
+        let errorMsg = '';
+        let newQueuesToAdd = [];
+        let activeIds = new Set(); 
+
+        for (let entry of queueEntries) {
+          const qNumUpper = entry.qNum.toUpperCase().trim();
+          if (!qNumUpper) continue;
+
+          if (qNumUpper.charAt(0) !== entry.blindObj.prefix) {
+            hasError = true; errorMsg = `Queue number ${qNumUpper} is invalid for ${entry.blindObj.blind}. It must start with '${entry.blindObj.prefix}'.`; break;
+          }
+          
+          const existingActiveQueue = queues.find(q => q.id === qNumUpper);
+          if (existingActiveQueue) {
+            if (existingActiveQueue.phone === phone) { activeIds.add(qNumUpper); continue; } 
+            else { hasError = true; errorMsg = `Authentication failed. Phone number mismatch for queue ${qNumUpper}.`; break; }
+          }
+
+          const existingHistoryQueue = history.find(q => q.id === qNumUpper);
+          if (existingHistoryQueue) {
+            hasError = true; errorMsg = `Queue ${qNumUpper} was over or service completed.`; break;
+          }
+
+          newQueuesToAdd.push({ id: qNumUpper, phone: phone, nickName: entry.nickName || '', memberName: entry.memberName || '', memberId: entry.memberId || '', blindObj: entry.blindObj, status: requireConfirm ? 'Pending' : 'Confirmed', confirmedAt: requireConfirm ? null : Date.now(), adminId: requireConfirm ? null : 'System (Auto)', guestReply: '', adminReply: '', createdAt: Date.now() });
+          activeIds.add(qNumUpper);
+        }
+
+        if (hasError) return setDialog({ type: 'alert', title: 'Action Failed', message: errorMsg, onConfirm: () => setDialog(null) });
+
+        const idsArray = Array.from(activeIds);
+        setGuestQueueIds(idsArray);
+        setGuestPhone(phone);
+
+        if (newQueuesToAdd.length > 0) {
+          updateCloudState({ queues: [...queues, ...newQueuesToAdd] });
+          setJustRegisteredDate(Date.now());
+          setView('guest-receipt');
+        } else setView('guest-dash');
+      };
+
+      const handleGuestLogin = (queueEntries, phone) => {
+         const activePenalty = penalties.find(p => {
+            if (p.unbanTime <= Date.now()) return false;
+            if (p.phone && p.phone === phone) return true;
+            return queueEntries.some(e => {
+                const matchQ = p.qId && e.qNum.toUpperCase().trim() === p.qId;
+                const matchN = p.nickName && e.nickName.toUpperCase().trim() === p.nickName.toUpperCase().trim();
+                return matchQ || matchN;
+            });
+         });
+
+         if (activePenalty) {
+             const timeLeft = Math.ceil((activePenalty.unbanTime - Date.now()) / (60 * 1000));
+             setDialog({
+                 type: 'prompt', inputType: 'password', title: 'Queue Restricted',
+                 message: `Guest '${activePenalty.nickName || activePenalty.qId}' is restricted from queuing for another ${timeLeft} minutes.\n\nSupervisor Override Password:`,
+                 input: '', confirmText: 'Override & Queue', confirmStyle: 'danger',
+                 onConfirm: () => {
+                     const val = document.getElementById('dialog-input').value;
+                     if (val === ADMIN_PASSWORD) {
+                         const updated = penalties.filter(p => p !== activePenalty);
+                         updateCloudState({ penalties: updated });
+                         setDialog(null);
+                         setTimeout(() => executeLogin(queueEntries, phone), 100);
+                     } else setDialog({ type: 'alert', title: 'Error', message: 'Invalid Supervisor Password.', onConfirm: () => setDialog(null) });
+                 },
+                 onCancel: () => setDialog(null)
+             });
+             return;
+         }
+         executeLogin(queueEntries, phone);
+      };
+
+      const handleAdminFastRegister = (queueEntries, phone) => {
+        let hasError = false;
+        let errorMsg = '';
+        let newQueuesToAdd = [];
+        let activeIds = new Set(); 
+
+        for (let entry of queueEntries) {
+          const qNumUpper = entry.qNum.toUpperCase().trim();
+          if (!qNumUpper) continue;
+          if (qNumUpper.charAt(0) !== entry.blindObj.prefix) { hasError = true; errorMsg = `Queue number ${qNumUpper} is invalid for ${entry.blindObj.blind}. It must start with '${entry.blindObj.prefix}'.`; break; }
+          if (queues.find(q => q.id === qNumUpper)) { hasError = true; errorMsg = `Queue ${qNumUpper} is already active on the board.`; break; }
+          if (history.find(q => q.id === qNumUpper)) { hasError = true; errorMsg = `Queue ${qNumUpper} was already completed or canceled today.`; break; }
+
+          newQueuesToAdd.push({ id: qNumUpper, phone: phone, nickName: entry.nickName || '', memberName: 'Admin Fast Reg', memberId: 'Admin By-pass', blindObj: entry.blindObj, status: 'Confirmed', confirmedAt: Date.now(), adminId: adminName, guestReply: '', adminReply: '', createdAt: Date.now() });
+          activeIds.add(qNumUpper);
+        }
+
+        if (hasError) return setDialog({ type: 'alert', title: 'Action Failed', message: errorMsg, onConfirm: () => setDialog(null) });
+        if (newQueuesToAdd.length === 0) return;
+
+        const activePenalty = penalties.find(p => {
+            if (p.unbanTime <= Date.now()) return false;
+            if (p.phone && p.phone === phone) return true;
+            return queueEntries.some(e => {
+                const matchQ = p.qId && e.qNum.toUpperCase().trim() === p.qId;
+                const matchN = p.nickName && e.nickName.toUpperCase().trim() === p.nickName.toUpperCase().trim();
+                return matchQ || matchN;
+            });
+        });
+
+        const doRegister = () => {
+            updateCloudState({ queues: [...queues, ...newQueuesToAdd] });
+            setAdminRegisterOpen(false);
+            setDialog({ type: 'alert', title: 'Success', message: `Successfully registered ${newQueuesToAdd.length} queue(s).`, onConfirm: () => setDialog(null) });
+        };
+
+        if (activePenalty) {
+             setDialog({
+                 type: 'prompt', inputType: 'password', title: 'Queue Restricted',
+                 message: `Guest '${activePenalty.nickName || activePenalty.qId}' is restricted from queuing for another ${Math.ceil((activePenalty.unbanTime - Date.now()) / 60000)} minutes.\n\nSupervisor Override Password:`,
+                 input: '', confirmText: 'Override & Queue', confirmStyle: 'danger',
+                 onConfirm: () => {
+                     const val = document.getElementById('dialog-input').value;
+                     if (val === ADMIN_PASSWORD) {
+                         const updated = penalties.filter(p => p !== activePenalty);
+                         updateCloudState({ penalties: updated });
+                         setDialog(null);
+                         setTimeout(doRegister, 100);
+                     } else setDialog({ type: 'alert', title: 'Error', message: 'Invalid Supervisor Password.', onConfirm: () => setDialog(null) });
+                 },
+                 onCancel: () => setDialog(null)
+             });
+             return;
+        }
+        doRegister();
+      };
+
+      const executeRestore = () => {
+        const toRestore = history.filter(h => selectedRestores.includes(h.id));
+        const newHistory = history.filter(h => !selectedRestores.includes(h.id));
+        const resetRestore = toRestore.map(q => ({ ...q, status: 'Pending', endedAt: null, adminId: null, seatedAt: null }));
+        updateCloudState({ queues: [...queues, ...resetRestore], history: newHistory });
+        setRestoreModalOpen(false);
+        setSelectedRestores([]);
+      };
+
+      const handleAdvancedReset = (options) => {
+        const { clearQueues, clearSeats, clearHistory } = options;
+        let newHistory = [...history];
+        let newQueues = [...queues];
+        let newTables = [...tables];
+        const nowMs = Date.now();
+
+        if (clearQueues) {
+          if (!clearHistory) {
+            const canceledQueues = newQueues.map(q => ({ ...q, status: 'Canceled', endedAt: nowMs, duration: ((nowMs - q.createdAt)/60000).toFixed(2) + ' mins', adminId: adminName }));
+            newHistory = [...newHistory, ...canceledQueues];
+          }
+          newQueues = [];
+        }
+
+        if (clearSeats) {
+          newTables = newTables.map(t => {
+            if (!clearHistory) {
+               t.seats.forEach(s => {
+                 if (s) {
+                   const durationMins = ((nowMs - s.createdAt) / 60000).toFixed(2);
+                   newHistory.push({ ...s, status: 'Completed (Table)', endedAt: nowMs, duration: `${durationMins} mins`, adminId: adminName });
+                 }
+               });
+            }
+            return { ...t, seats: Array(10).fill(null) };
+          });
+        }
+
+        let updates = { queues: newQueues, tables: newTables, history: newHistory };
+
+        if (clearHistory) {
+          updates.history = [];
+          updates.pmlHistory = [];
+          updates.pmlData = Array.from({length: 30}, () => ({ table: '', seat: '', blind: '', player: '', reqTime: '', status: '', movedTime: '', remark: '' }));
+          updates.penalties = [];
+        }
+
+        updateCloudState(updates);
+        setResetModalOpen(false);
+        setDialog({ type: 'alert', title: 'Reset Successful', message: 'The selected data has been successfully reset across all devices.', onConfirm: () => setDialog(null) });
+      };
+
+      const toggleTableOpen = (tId) => {
+        const t = tables.find(x => x.id === tId);
+        if (t.isOpen && t.seats.some(s => s !== null)) return setDialog({ type: 'alert', title: 'Table Occupied', message: 'You must clear all seated players before closing this table.', onConfirm: () => setDialog(null) });
+        const newTables = tables.map(x => x.id === tId ? { ...x, isOpen: !x.isOpen } : x);
+        updateCloudState({ tables: newTables });
+      };
+
+      const handleDragStartQueue = (e, qId) => { e.dataTransfer.setData('source', 'queue'); e.dataTransfer.setData('qId', qId); };
+      const handleDragStartSeat = (e, tId, sIdx) => { e.dataTransfer.setData('source', 'seat'); e.dataTransfer.setData('tId', tId); e.dataTransfer.setData('sIdx', sIdx.toString()); };
+
+      const handleDropToBlindList = (e, targetBlindPrefix) => {
+        e.preventDefault(); e.stopPropagation();
+        const source = e.dataTransfer.getData('source');
+
+        if (source === 'seat') {
+          const tId = e.dataTransfer.getData('tId');
+          const sIdx = parseInt(e.dataTransfer.getData('sIdx'), 10);
+          const newTables = [...tables];
+          const sourceTableIdx = newTables.findIndex(t => t.id === tId);
+          const player = newTables[sourceTableIdx].seats[sIdx];
+          
+          if(!player) return;
+          if (player.id.charAt(0).toUpperCase() !== targetBlindPrefix) return setDialog({ type: 'alert', title: 'Action Denied', message: `Queue ${player.id} can only be placed in the ${player.blindObj.blind} list.`, onConfirm: () => setDialog(null) });
+
+          newTables[sourceTableIdx].seats[sIdx] = null;
+          const newBlind = BLINDS.find(b => b.prefix === targetBlindPrefix);
+          const newPlayer = { ...player, status: 'Confirmed', blindObj: newBlind, seatedAt: null };
+          
+          updateCloudState({ tables: newTables, queues: [...queues, newPlayer] });
+        } else if (source === 'queue') {
+          const draggedQId = e.dataTransfer.getData('qId');
+          const qToMove = queues.find(q => q.id === draggedQId);
+          if(!qToMove) return;
+          if (qToMove.id.charAt(0).toUpperCase() !== targetBlindPrefix) return setDialog({ type: 'alert', title: 'Action Denied', message: `Queue ${qToMove.id} can only be placed in the ${qToMove.blindObj.blind} list.`, onConfirm: () => setDialog(null) });
+
+          const newBlind = BLINDS.find(b => b.prefix === targetBlindPrefix);
+          const updatedQ = { ...qToMove, blindObj: newBlind };
+          const newQueues = queues.filter(q => q.id !== draggedQId);
+          newQueues.push(updatedQ); 
+          updateCloudState({ queues: newQueues });
+        }
+      };
+
+      const handleDropToQueueItem = (e, targetQId, targetBlindPrefix) => {
+        e.preventDefault(); e.stopPropagation();
+        const source = e.dataTransfer.getData('source');
+
+        if (source === 'seat') {
+          const tId = e.dataTransfer.getData('tId');
+          const sIdx = parseInt(e.dataTransfer.getData('sIdx'), 10);
+          const newTables = [...tables];
+          const sourceTableIdx = newTables.findIndex(t => t.id === tId);
+          const player = newTables[sourceTableIdx].seats[sIdx];
+          
+          if(!player) return;
+          if (player.id.charAt(0).toUpperCase() !== targetBlindPrefix) return setDialog({ type: 'alert', title: 'Action Denied', message: `Queue ${player.id} can only be placed in the ${player.blindObj.blind} list.`, onConfirm: () => setDialog(null) });
+
+          newTables[sourceTableIdx].seats[sIdx] = null;
+          const newBlind = BLINDS.find(b => b.prefix === targetBlindPrefix);
+          const newPlayer = { ...player, status: 'Confirmed', blindObj: newBlind, seatedAt: null };
+          
+          const newQueues = [...queues];
+          const targetIdx = newQueues.findIndex(q => q.id === targetQId);
+          newQueues.splice(targetIdx, 0, newPlayer);
+          updateCloudState({ tables: newTables, queues: newQueues });
+        } else if (source === 'queue') {
+          const draggedQId = e.dataTransfer.getData('qId');
+          if (draggedQId === targetQId) return;
+
+          const qToMove = queues.find(q => q.id === draggedQId);
+          if(!qToMove) return;
+          if (qToMove.id.charAt(0).toUpperCase() !== targetBlindPrefix) return setDialog({ type: 'alert', title: 'Action Denied', message: `Queue ${qToMove.id} can only be placed in the ${qToMove.blindObj.blind} list.`, onConfirm: () => setDialog(null) });
+
+          const newBlind = BLINDS.find(b => b.prefix === targetBlindPrefix);
+          const updatedQ = { ...qToMove, blindObj: newBlind };
+          const filteredQueues = queues.filter(q => q.id !== draggedQId);
+          const targetIdx = filteredQueues.findIndex(q => q.id === targetQId);
+          if(targetIdx !== -1) filteredQueues.splice(targetIdx, 0, updatedQ);
+          else filteredQueues.push(updatedQ);
+          updateCloudState({ queues: filteredQueues });
+        }
+      };
+
+      const handleDropToSeat = (e, targetTableId, targetSeatIdx) => {
+        e.preventDefault();
+        const source = e.dataTransfer.getData('source');
+
+        if (source === 'queue') {
+          const qId = e.dataTransfer.getData('qId');
+          if (!qId) return;
+          const q = queues.find(x => x.id === qId);
+          if (!q) return;
+
+          const newTables = [...tables];
+          const tIdx = newTables.findIndex(t => t.id === targetTableId);
+          const targetTable = newTables[tIdx];
+          
+          if (targetTable.seats[targetSeatIdx] !== null) return setDialog({ type: 'alert', title: 'Seat Occupied', message: 'Please drop the player onto an empty seat.', onConfirm: () => setDialog(null) });
+          if (!targetTable.blindPrefix) return setDialog({ type: 'alert', title: 'Action Denied', message: 'Please assign a blind to the table before seating players.', onConfirm: () => setDialog(null) });
+          if (q.id.charAt(0).toUpperCase() !== targetTable.blindPrefix) return setDialog({ type: 'alert', title: 'Blind Mismatch', message: `Cannot seat ticket ${q.id} at a table set to blind ${targetTable.blindPrefix}.`, onConfirm: () => setDialog(null) });
+
+          q.seatedAt = Date.now(); 
+          newTables[tIdx].seats[targetSeatIdx] = q;
+          
+          const newQueues = queues.filter(x => x.id !== qId);
+          updateCloudState({ tables: newTables, queues: newQueues });
+
+          const playerStr = `${q.id} (${q.nickName})`;
+          const newPmlData = pmlData.map(row => {
+              if (row.player === playerStr && row.status !== 'Completed' && row.status !== 'Cancel') {
+                  return { ...row, status: 'Completed', movedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) };
+              }
+              return row;
+          });
+          updateCloudState({ pmlData: newPmlData });
+
+        } else if (source === 'seat') {
+          const sourceTId = e.dataTransfer.getData('tId');
+          const sourceSIdx = parseInt(e.dataTransfer.getData('sIdx'), 10);
+          if (sourceTId === targetTableId && sourceSIdx === targetSeatIdx) return; 
+          
+          const newTables = [...tables];
+          const sourceTableIdx = newTables.findIndex(t => t.id === sourceTId);
+          const targetTableIdx = newTables.findIndex(t => t.id === targetTableId);
+          const playerToMove = newTables[sourceTableIdx].seats[sourceSIdx];
+          const playerAtTarget = newTables[targetTableIdx].seats[targetSeatIdx];
+          const targetTable = newTables[targetTableIdx];
+
+          if (targetTable.id !== sourceTId) {
+             if (!targetTable.blindPrefix) return setDialog({ type: 'alert', title: 'Action Denied', message: 'Please assign a blind to the target table first.', onConfirm: () => setDialog(null) });
+             if (playerToMove.id.charAt(0).toUpperCase() !== targetTable.blindPrefix) return setDialog({ type: 'alert', title: 'Blind Mismatch', message: `Cannot move ticket ${playerToMove.id} to a table set to blind ${targetTable.blindPrefix}.`, onConfirm: () => setDialog(null) });
+          }
+
+          newTables[sourceTableIdx].seats[sourceSIdx] = playerAtTarget;
+          newTables[targetTableIdx].seats[targetSeatIdx] = playerToMove;
+          
+          const playerStr = `${playerToMove.id} (${playerToMove.nickName})`;
+          const newPmlData = pmlData.map(row => {
+              if (row.player === playerStr && row.status !== 'Completed' && row.status !== 'Cancel') {
+                  return { ...row, status: 'Completed', movedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) };
+              }
+              return row;
+          });
+
+          updateCloudState({ tables: newTables, pmlData: newPmlData });
+        }
+      };
+
+      const removePlayerFromSeat = (tableIndex, seatIndex, player) => {
+        setDialog({
+          type: 'confirm',
+          title: 'Confirm Remove?',
+          message: `Remove ${player.nickName || player.id} from ${tables[tableIndex].id} ${seatIndex < 9 ? 'Seat ' + (seatIndex + 1) : 'Spare'}?`,
+          confirmStyle: 'danger',
+          onConfirm: () => {
+             const newTables = [...tables];
+             newTables[tableIndex].seats[seatIndex] = null;
+             
+             const endedAt = Date.now();
+             const durationMins = ((endedAt - player.createdAt) / 60000).toFixed(2);
+             const historyRecord = { ...player, status: 'Completed (Table)', endedAt, duration: `${durationMins} mins`, adminId: adminName };
+             
+             updateCloudState({ tables: newTables, history: [...history, historyRecord] });
+             setDialog(null);
+          },
+          onCancel: () => setDialog(null)
+        });
+      };
+
+      const executeFinishQueue = (q, endStatus) => {
+        const endedAt = Date.now();
+        const durationMins = ((endedAt - q.createdAt) / 60000).toFixed(2);
+        const historyRecord = { ...q, status: endStatus, endedAt, duration: `${durationMins} mins`, adminId: adminName };
+        updateCloudState({ history: [...history, historyRecord], queues: queues.filter(item => item.id !== q.id) });
+        setDialog(null); 
+      };
+
+      const confirmQueuePrompt = (q) => {
+        setDialog({
+          type: 'confirm', title: 'Confirm Queue', message: `Please verify physical queue number matches ${q.id} and confirm.`, confirmText: 'Verify & Confirm',
+          onConfirm: () => { updateQueueStatus(q.id, 'Confirmed'); setDialog(null); }, onCancel: () => setDialog(null)
+        });
+      };
+
+      const finishQueue = (id, endStatus) => {
+        const q = queues.find(item => item.id === id);
+        if (!q) return;
+
+        if (endStatus === 'Canceled' || endStatus === 'Canceled (No Show)') {
+          setDialog({
+            type: 'confirm', title: 'Confirm Remove', message: `Are you sure you want to remove ${id} from the queue?`, confirmText: 'Proceed', confirmStyle: 'danger',
+            onConfirm: () => {
+               setDialog({
+                  type: 'confirm', title: 'DOUBLE CONFIRMATION', message: `This will completely remove ${id} (${q.nickName}) and shift other queues up. Proceed?`, confirmText: 'YES, REMOVE PERMANENTLY', confirmStyle: 'danger',
+                  onConfirm: () => executeFinishQueue(q, endStatus), onCancel: () => setDialog(null)
+               });
+            }, onCancel: () => setDialog(null)
+          });
+        } else executeFinishQueue(q, endStatus);
+      };
+
+      const updateQueueStatus = (id, newStatus) => {
+        const updated = queues.map(q => {
+          if (q.id === id) {
+            const changes = { status: newStatus };
+            if (newStatus === 'Calling') changes.callingStartedAt = Date.now();
+            if (newStatus === 'Confirmed' && !q.confirmedAt) { changes.confirmedAt = Date.now(); changes.adminId = adminName; }
+            return { ...q, ...changes };
+          }
+          return q;
+        });
+        updateCloudState({ queues: updated });
+      };
+      
+      const acknowledgeGuestReply = (id) => {
+        setDialog({
+          type: 'prompt', title: 'Reply to Guest', message: 'Enter your message to acknowledge the guest:', input: '', confirmText: 'Send Reply',
+          onConfirm: () => {
+             const val = document.getElementById('dialog-input').value || 'Acknowledged.';
+             const updated = queues.map(q => q.id === id ? { ...q, adminReply: val } : q);
+             updateCloudState({ queues: updated });
+             setDialog(null);
+          }, onCancel: () => setDialog(null)
+        });
+      };
+
+      const handlePmlBulkDelete = (indices, rows) => {
+        setDialog({
+          type: 'confirm', title: 'Clear All Finished', message: `Are you sure you want to clear ${rows.length} completed/canceled rows and save to history?`, confirmStyle: 'danger',
+          onConfirm: () => {
+            const newHist = [...pmlHistory];
+            const nowMs = Date.now();
+            rows.forEach((row, i) => { newHist.push({ ...row, originalIndex: indices[i], deletedAt: nowMs, adminId: adminName }); });
+            
+            const newData = [...pmlData];
+            indices.forEach(idx => { newData[idx] = { table: '', seat: '', blind: '', player: '', reqTime: '', status: '', movedTime: '', remark: '' }; });
+            
+            updateCloudState({ pmlHistory: newHist, pmlData: newData });
+            setDialog(null);
+          }, onCancel: () => setDialog(null)
+        });
+      };
+
+      // --- Rendering Logic ---
+      return (
+        <div className="min-h-screen bg-black text-gray-100 font-sans flex flex-col h-screen overflow-hidden">
+          
+          {view !== 'admin-dash' ? (
+            <header className="pt-3 pb-2 border-b border-gray-800 relative z-10 bg-black flex-shrink-0">
+              <div className="text-center px-4 max-w-6xl mx-auto pr-16 sm:pr-0">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#D8B673] uppercase tracking-widest mb-2 drop-shadow-md">Resort Poker Hub</h1>
+                <p className="text-[8px] sm:text-[10px] md:text-xs text-white mb-1 font-bold">Welcome to Resorts World Sentosa. Kindly present your Membership Card to register at our Poker Registration Counter.</p>
+                <p className="text-[8px] sm:text-[10px] md:text-xs text-white font-bold">Resorts World Sentosa supports Responsible Gaming. Call NCPG Helpline at 1800-6-668-668 for assistance, or visit http://www.ncpg.org.sg for more information. To put a limit on how much you want to gamble, you may enquire with our staff for details.</p>
+              </div>
+              {view === 'guest-setup' ? <div onClick={() => setView('admin-login')} className="absolute top-0 right-0 w-16 h-16 sm:w-24 sm:h-24 z-50 cursor-default" aria-label="Hidden Admin Access"></div> : null}
+            </header>
+          ) : null}
+
+          <main className={`flex-grow w-full ${view === 'admin-dash' ? 'h-full overflow-hidden flex flex-col' : 'p-3 sm:p-6 overflow-y-auto relative'}`}>
+            
+            {view === 'guest-setup' ? <GuestSetupForm onSubmit={handleGuestLogin} visibleBlinds={visibleBlindsList} dialogFn={setDialog} requireMemberInfo={requireMemberInfo} /> : null}
+            {view === 'guest-receipt' ? <ReceiptScreen queueIds={guestQueueIds} phone={guestPhone} date={justRegisteredDate} onContinue={() => setView('guest-dash')} /> : null}
+            {view === 'admin-login' ? <AdminLogin onLogin={() => setView('admin-dash')} onCancel={() => setView('guest-setup')} /> : null}
+            
+            {view === 'guest-dash' ? (
+              <div className="max-w-[1400px] mx-auto space-y-4 sm:space-y-6">
+                <div className="flex justify-between items-center mb-2">
+                  <h2 className="text-lg sm:text-xl font-bold text-[#D8B673]">My Dashboard</h2>
+                  <button onClick={() => setView('guest-setup')} className="text-sm text-gray-400 underline hover:text-white">Logout</button>
+                </div>
+                <div className="grid gap-4 sm:gap-6">
+                  {guestQueueIds.map(id => {
+                    const q = queues.find(item => item.id === id);
+                    return <GuestStatusPanel key={id} queueId={id} queue={q} setDialog={setDialog} onReply={(reply) => { updateCloudState({ queues: queues.map(x => x.id === id ? { ...x, guestReply: reply } : x) }); }} />
+                  })}
+                </div>
+                <div className="mt-4 sm:mt-8">
+                  <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-[#D8B673]">Live Board</h3>
+                  <QueueBoard queues={queues} visibleBlinds={visibleBlindsList} />
+                </div>
+              </div>
+            ) : null}
+
+            {view === 'admin-dash' ? (
+              <>
+                <div className="bg-[#1e293b] border-b border-[#334155] p-2 flex justify-between items-center z-30 relative">
+                  <div className="flex gap-2 items-center z-10">
+                    <button onClick={() => setAdminLayoutMode('both')} className={`px-4 py-1.5 text-xs sm:text-sm font-bold rounded shadow transition ${adminLayoutMode === 'both' ? 'bg-[#d8b46e] text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Split View</button>
+                    <button onClick={() => setAdminLayoutMode('tables')} className={`px-4 py-1.5 text-xs sm:text-sm font-bold rounded shadow transition hidden sm:block ${adminLayoutMode === 'tables' ? 'bg-[#d8b46e] text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Tables Only</button>
+                    <button onClick={() => setAdminLayoutMode('queues')} className={`px-4 py-1.5 text-xs sm:text-sm font-bold rounded shadow transition hidden sm:block ${adminLayoutMode === 'queues' ? 'bg-[#d8b46e] text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Queues Only</button>
+                  </div>
+                  
+                  <div className="hidden md:flex absolute inset-0 items-center justify-center pointer-events-none gap-3">
+                    <h1 className="text-[#D8B673] font-black tracking-widest uppercase text-base sm:text-lg drop-shadow-md">Resort Poker Hub</h1>
+                    <div className="h-4 w-px bg-[#475569]"></div>
+                    <div className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                       {isSyncing ? <Icons.Cloud /> : null}
+                       <span>{now.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                       <span>|</span>
+                       <span className="text-left w-10">{now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 z-10">
+                    <button onClick={() => setShowLiveBoard(!showLiveBoard)} className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded shadow transition ${showLiveBoard ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300'}`}>{showLiveBoard ? 'Hide Live Board' : 'Show Live Board'}</button>
+                    <button onClick={() => setView('admin-pml')} className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm px-3 py-1.5 rounded transition shadow">Movement List</button>
+                    <button onClick={handleAdminExit} className="text-gray-400 text-xs sm:text-sm underline hover:text-white px-2">Exit</button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col lg:flex-row flex-1 w-full bg-pattern overflow-hidden">
+                  
+                  {(adminLayoutMode === 'both' || adminLayoutMode === 'tables') ? (
+                    <div className={`overflow-y-auto p-2 sm:p-4 custom-scrollbar ${adminLayoutMode === 'both' ? 'w-full lg:w-3/4' : 'flex-1'}`}>
+                      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-20`}>
+                        {tables.filter(t => t.isOpen).map((table, tIdx) => {
+                          const realIdx = tables.findIndex(x => x.id === table.id);
+
+                          return (
+                            <div key={table.id} className="bg-[#1e293b] border border-[#334155] rounded-md shadow-xl overflow-hidden flex flex-col">
+                              <div className="bg-[#0f172a] p-1.5 border-b border-[#334155] flex justify-between items-center gap-1">
+                                <h3 className="text-white font-bold text-[10px] sm:text-xs whitespace-nowrap">{table.id}</h3>
+                                <select 
+                                  className="w-auto min-w-[100px] max-w-[140px] bg-[#334155] text-[#D8B673] text-[10px] sm:text-[11px] font-bold p-1 rounded outline-none border border-[#475569] truncate ml-2"
+                                  value={table.blindPrefix}
+                                  onChange={(e) => {
+                                    const newPrefix = e.target.value;
+                                    if (newPrefix && tables[realIdx].seats.some(s => s !== null)) return setDialog({ type: 'alert', title: 'Action Denied', message: 'Cannot change table blind while players are seated.', onConfirm: () => setDialog(null) });
+                                    const newT = [...tables]; newT[realIdx].blindPrefix = newPrefix; updateCloudState({ tables: newT });
+                                  }}
+                                >
+                                  <option value="">-- Assign Blind --</option>
+                                  {visibleBlindsList.map(b => <option key={b.prefix} value={b.prefix}>{b.blind} ({b.buyIn})</option>)}
+                                </select>
+                              </div>
+
+                              <div className="p-1.5 flex-1 flex flex-col gap-0.5">
+                                {table.seats.map((seatQueue, sIdx) => {
+                                  const isSpare = sIdx === 9;
+                                  const label = isSpare ? 'Spare' : `Seat ${sIdx + 1}`;
+                                  const isHighlighted = seatQueue && highlightedPhone && highlightedPhone === seatQueue.phone;
+                                  
+                                  return (
+                                    <div key={sIdx} className={`text-[10px] sm:text-xs border rounded transition-colors draggable-item ${isHighlighted ? 'bg-yellow-900/50 border-yellow-500' : seatQueue ? 'bg-[#3b82f6]/20 border-[#3b82f6]/50' : 'bg-[#0f172a] border-[#334155] hover:bg-[#1e293b]'}`}>
+                                      {seatQueue ? (
+                                        <div className="flex flex-col">
+                                           <div 
+                                             className={`flex items-center justify-between px-1.5 sm:px-2 py-1.5 cursor-pointer cursor-grab h-8 ${isHighlighted ? 'hover:bg-yellow-800/40' : ''}`}
+                                             draggable={true} onDragStart={(e) => handleDragStartSeat(e, table.id, sIdx)}
+                                             onClick={() => {
+                                                const isExpanding = !(expandedSeat?.tId === table.id && expandedSeat?.sIdx === sIdx);
+                                                setExpandedSeat(isExpanding ? {tId: table.id, sIdx} : null);
+                                                setHighlightedPhone(isExpanding ? seatQueue.phone : null);
+                                             }}
+                                           >
+                                             <span className={`font-bold truncate px-0.5 text-[10px] sm:text-xs flex items-center gap-1 w-full ${isHighlighted ? 'text-yellow-300' : 'text-white'}`}>
+                                               {expandedSeat?.tId === table.id && expandedSeat?.sIdx === sIdx ? <Icons.ChevronDown className={`shrink-0 w-3 h-3 ${isHighlighted ? 'text-yellow-400' : ''}`} /> : <Icons.ChevronRight className={`shrink-0 w-3 h-3 ${isHighlighted ? 'text-yellow-400' : ''}`} />}
+                                               <span className={`text-[10px] sm:text-xs font-normal w-14 sm:w-16 shrink-0 ${isHighlighted ? 'text-yellow-200' : 'text-gray-400'}`}>{label}</span>
+                                               <span className="truncate">{seatQueue.id} <span className={`font-normal ${isHighlighted ? 'text-yellow-100' : 'text-gray-300'}`}>({seatQueue.nickName})</span></span>
+                                             </span>
+                                           </div>
+                                           {expandedSeat?.tId === table.id && expandedSeat?.sIdx === sIdx ? (
+                                              <div className={`p-1.5 mx-1 mb-1 rounded border text-[9px] sm:text-[10px] shadow-inner ${isHighlighted ? 'bg-yellow-900/60 border-yellow-600' : 'bg-[#1e3a8a]/40 border-[#1e40af]'}`}>
+                                                 <div className={`grid grid-cols-[50px_1fr] gap-0.5 ${isHighlighted ? 'text-yellow-100' : 'text-gray-200'}`}>
+                                                   <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Queue</span><span className="font-bold">{seatQueue.id}</span>
+                                                   <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Name</span><span className="font-bold truncate">{seatQueue.nickName}</span>
+                                                   <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Member</span><span className="font-bold truncate text-[8px] sm:text-[9px]">{seatQueue.memberName || 'N/A'} ({seatQueue.memberId || 'N/A'})</span>
+                                                   <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Contact</span><span className="font-bold truncate">{seatQueue.phone}</span>
+                                                 </div>
+                                                 <button onClick={(e) => { e.stopPropagation(); removePlayerFromSeat(realIdx, sIdx, seatQueue); }} className="mt-1.5 w-full bg-red-600/80 hover:bg-red-500 text-white font-bold py-1 rounded transition">Remove Player</button>
+                                              </div>
+                                           ) : null}
+                                        </div>
+                                      ) : (
+                                        <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropToSeat(e, table.id, sIdx)} className="flex items-center justify-center px-1.5 py-1 h-8">
+                                          <span className="text-gray-500 font-bold w-full text-center text-[10px] sm:text-xs">{label}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {tables.filter(t => t.isOpen).length === 0 ? <div className="col-span-full p-8 text-center text-gray-500 italic text-sm">No tables are open. Use 'Manage Tables'.</div> : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {(adminLayoutMode === 'both' || adminLayoutMode === 'queues') ? (
+                    <div className={`${adminLayoutMode === 'both' ? 'w-full lg:w-1/4' : 'w-full'} flex-shrink-0 bg-[#0f172a] border-l border-[#334155] flex flex-col shadow-[-10px_0_15px_-3px_rgba(0,0,0,0.5)] z-20`}>
+                      <div className="flex flex-col bg-[#1e293b] border-b border-[#334155] z-30 shrink-0">
+                        <div className="p-3 flex items-center gap-2 border-b border-[#334155]">
+                          <button 
+                             onClick={() => {
+                                setDialog({
+                                   type: 'prompt', title: 'Update Supervisor Info', message: 'Enter Poker Supervisor Name / EMPID:', input: adminName === 'Poker Supervisor/ EMPID' ? '' : adminName, confirmText: 'Save',
+                                   onConfirm: () => { const val = document.getElementById('dialog-input').value || 'Poker Supervisor/ EMPID'; updateCloudState({ adminName: val }); setDialog(null); }, onCancel: () => setDialog(null)
+                                });
+                             }}
+                             className="flex-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-xs py-2 px-3 rounded text-center shadow shadow-black/50 outline-none transition overflow-hidden whitespace-nowrap text-ellipsis"
+                          >{adminName}</button>
+                          <button onClick={() => setIsAdminControlsExpanded(!isAdminControlsExpanded)} className="bg-gray-700 text-white p-2 rounded shadow hover:bg-gray-600 transition shrink-0">
+                            {isAdminControlsExpanded ? <Icons.ChevronUp /> : <Icons.ChevronDown />}
+                          </button>
+                        </div>
+                        
+                        <div className={`transition-all overflow-hidden ${isAdminControlsExpanded ? 'max-h-[400px]' : 'max-h-0'}`}>
+                          <div className="p-3 pt-0 flex flex-col gap-2 mt-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <button onClick={() => setAdminRegisterOpen(true)} className="col-span-2 bg-blue-700 hover:bg-blue-600 text-white font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition flex items-center justify-center gap-2">⚡ Admin Fast Registration</button>
+                              <button onClick={() => { setSelectedRestores([]); setRestoreModalOpen(true); }} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Restore 100 Delete</button>
+                              <button onClick={() => setResetModalOpen(true)} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Reset Queues</button>
+                              <button onClick={() => setBlindModalOpen(true)} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Blind Vis Option</button>
+                              <button onClick={() => setTableModalOpen(true)} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Manage Tables</button>
+                              <button onClick={() => updateCloudState({ requireConfirm: !requireConfirm })} className="col-span-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Require Confirmation: {requireConfirm ? 'ON' : 'OFF (Bypass)'}</button>
+                              <button onClick={() => updateCloudState({ requireMemberInfo: !requireMemberInfo })} className="col-span-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Member Req: {requireMemberInfo ? 'ON (Strict)' : 'OFF (Bypass)'}</button>
+                            </div>
+                            <div className="flex flex-col gap-2 mt-2">
+                              <button onClick={() => triggerDownloads(false)} className="w-full bg-green-700 hover:bg-green-600 text-white font-bold text-xs py-2 rounded transition shadow flex items-center justify-center gap-2"><Icons.Download /> Backup / Download History</button>
+                              <button onClick={() => document.getElementById('upload-backup-input').click()} className="w-full bg-indigo-700 hover:bg-indigo-600 text-white font-bold text-xs py-2 rounded transition shadow flex items-center justify-center gap-2"><Icons.Upload /> Restore / Upload Data File</button>
+                              <input type="file" id="upload-backup-input" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-4 pb-20">
+                        {visibleBlindsList.map(b => {
+                          const blindQs = queues.filter(q => q.blindObj.prefix === b.prefix);
+                          const isCollapsed = collapsedBlinds[b.prefix];
+                          
+                          return (
+                            <div key={b.prefix} className="flex flex-col min-h-[40px]" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropToBlindList(e, b.prefix)}>
+                              <div onClick={() => setCollapsedBlinds(prev => ({ ...prev, [b.prefix]: !prev[b.prefix] }))} className={`flex justify-between items-center bg-[#2f3b75] text-white text-sm font-bold px-3 py-2.5 shadow border border-[#3e4c8a] cursor-pointer transition-all ${isCollapsed ? 'rounded' : 'rounded-t rounded-b-none border-b-0'}`}>
+                                <div className="flex items-center gap-2">
+                                  <Icons.ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? '-rotate-90' : 'rotate-0'}`} />
+                                  <span>{b.blind} <span className="font-normal opacity-80 ml-1 text-xs hidden sm:inline-block">({b.buyIn})</span></span>
+                                </div>
+                                <div className="bg-[#1e293b] text-blue-200 px-2 py-0.5 rounded-full text-[10px] shadow-inner border border-[#334155]">Total: {blindQs.length}</div>
+                              </div>
+                              
+                              <div className={`bg-[#1e293b] border border-[#334155] rounded-b overflow-y-auto custom-scrollbar transition-all duration-300 ${isCollapsed ? 'max-h-0 border-none opacity-0' : 'max-h-[350px] p-2 opacity-100'}`}>
+                                {blindQs.length === 0 ? <div className="text-[#64748b] text-sm p-3 italic pointer-events-none font-medium">No queues</div> : (
+                                  <div className="flex flex-col gap-1.5 items-stretch">
+                                    {blindQs.map(q => <AdminQueueListItem key={q.id} q={q} b={b} expandedQId={expandedQId} setExpandedQId={setExpandedQId} highlightedPhone={highlightedPhone} setHighlightedPhone={setHighlightedPhone} handleDragStartQueue={handleDragStartQueue} handleDropToQueueItem={handleDropToQueueItem} finishQueue={finishQueue} updateQueueStatus={updateQueueStatus} acknowledgeGuestReply={acknowledgeGuestReply} confirmQueuePrompt={confirmQueuePrompt} isSeated={seatedPhones.has(q.phone)} />)}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {showLiveBoard ? (
+                         <div className="border-t border-[#334155] p-2 bg-[#0f172a] h-48 overflow-y-auto">
+                            <h3 className="text-xs font-bold mb-2 text-[#D8B673] uppercase tracking-wider">Live Board Mini</h3>
+                            <QueueBoard queues={queues} visibleBlinds={visibleBlindsList} />
+                         </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+
+            {view === 'admin-pml' ? (
+              <PlayerMovementList 
+                data={pmlData} 
+                tables={tables}
+                updateData={(newData) => updateCloudState({ pmlData: newData })} 
+                onBack={() => setView('admin-dash')} 
+                requestDelete={(index, row) => {
+                  setDialog({
+                    type: 'confirm', title: 'Clear Movement Row', message: `Clear Row ${index + 1} and save to history?`, confirmStyle: 'danger',
+                    onConfirm: () => {
+                      const newHist = [...pmlHistory, { ...row, originalIndex: index, deletedAt: Date.now(), adminId: adminName }];
+                      const newData = [...pmlData];
+                      newData[index] = { table: '', seat: '', blind: '', player: '', reqTime: '', status: '', movedTime: '', remark: '' };
+                      updateCloudState({ pmlHistory: newHist, pmlData: newData });
+                      setDialog(null);
+                    }, onCancel: () => setDialog(null)
+                  });
+                }}
+                bulkDelete={handlePmlBulkDelete}
+                onApplyPenalty={handlePmlPenalty}
+                onCheckPenalty={handleCheckPmlPenalty}
+              />
+            ) : null}
+          </main>
+
+          {view !== 'admin-dash' ? (
+            <footer className="bg-black border-t border-gray-800 p-4 text-center mt-auto flex-shrink-0">
+              <p className="text-[10px] sm:text-xs text-gray-500 max-w-4xl mx-auto">Disclaimer: Final decision and management of the queue remains strictly with RWS Management and Counter Staff.</p>
+            </footer>
+          ) : null}
+
+          {showNewDayReminder && view === 'admin-dash' ? (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+              <div className="bg-[#1e293b] border border-[#D8B673] p-6 rounded-xl shadow-2xl max-w-md w-full text-center">
+                <Icons.Alert className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-[#D8B673] mb-2 uppercase tracking-wider">New Trading Day Started</h3>
+                <p className="text-gray-300 text-sm mb-6 leading-relaxed">Trading dates automatically reset at 04:00 AM.<br/><br/><span className="text-white font-bold bg-red-900/40 px-3 py-1 rounded">Supervisor Reminder:</span><br/>Please download the daily backup file and clear all data to start fresh for the new day.</p>
+                <div className="flex flex-col gap-3">
+                  <button onClick={() => { triggerDownloads(false); setShowNewDayReminder(false); setResetModalOpen(true); }} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2"><Icons.Download /> 1. Backup & Go to Reset</button>
+                  <button onClick={() => setShowNewDayReminder(false)} className="w-full border border-gray-600 hover:bg-gray-800 text-gray-400 font-bold py-2 rounded-lg transition">Dismiss Warning</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {resetModalOpen ? <AdminResetModal onClose={() => setResetModalOpen(false)} onReset={handleAdvancedReset} /> : null}
+          {adminRegisterOpen ? <AdminFastRegisterModal visibleBlinds={visibleBlindsList} onClose={() => setAdminRegisterOpen(false)} onRegister={handleAdminFastRegister} /> : null}
+          {blindModalOpen ? <AdminBlindModal blindVis={blindVis} updateBlindVis={(v) => updateCloudState({ blindVis: v })} autoBlindEnabled={autoBlindEnabled} updateAutoBlindEnabled={(v) => updateCloudState({ autoBlindEnabled: v })} weeklyPresets={weeklyPresets} updateWeeklyPresets={(v) => updateCloudState({ weeklyPresets: v })} onClose={() => setBlindModalOpen(false)} now={now} /> : null}
+
+          {restoreModalOpen ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+              <div className="bg-[#1e293b] border border-[#475569] p-6 rounded-xl shadow-2xl max-w-md w-full flex flex-col h-full max-h-[80vh]">
+                <div className="flex justify-between items-center mb-4 border-b border-gray-600 pb-2">
+                   <h3 className="text-lg font-bold text-white">Restore Last 100 Delete</h3>
+                   <button onClick={() => setRestoreModalOpen(false)} className="text-gray-400 hover:text-white"><Icons.Close /></button>
+                </div>
+                <div className="space-y-1 mb-4 flex-1 overflow-y-auto custom-scrollbar">
+                   {history.filter(h => !h.player).slice(-100).reverse().map(h => (
+                      <label key={h.id + h.endedAt} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white/5 rounded border border-transparent hover:border-[#334155] transition-colors">
+                         <input type="checkbox" className="w-4 h-4 rounded" checked={selectedRestores.includes(h.id)} onChange={(e) => { if (e.target.checked) setSelectedRestores([...selectedRestores, h.id]); else setSelectedRestores(selectedRestores.filter(id => id !== h.id)); }} />
+                         <span className="text-gray-200 font-medium text-sm">{h.id} ({h.nickName || 'N/A'})</span>
+                         <span className="text-gray-500 text-xs ml-auto whitespace-nowrap">{new Date(h.endedAt).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</span>
+                      </label>
+                   ))}
+                   {history.length === 0 ? <p className="text-gray-500 italic text-center p-4">No recently deleted queues.</p> : null}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                   <button onClick={() => setRestoreModalOpen(false)} className="flex-1 bg-gray-600 text-white font-bold py-2.5 rounded transition">Cancel</button>
+                   <button onClick={executeRestore} disabled={selectedRestores.length===0} className="flex-1 bg-[#d8b46e] hover:bg-[#c29e5a] disabled:opacity-50 text-black font-bold py-2.5 rounded transition">Confirm Restore</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {tableModalOpen ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+              <div className="bg-[#1e293b] border border-[#475569] p-6 rounded-xl shadow-2xl max-w-sm w-full">
+                <h3 className="text-lg font-bold text-white mb-4 border-b border-gray-600 pb-2">Table Open/Close Management</h3>
+                <div className="space-y-3 mb-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                  {tables.map(t => (
+                    <div key={t.id} className="flex justify-between items-center bg-[#0f172a] p-2 rounded border border-[#334155]">
+                      <span className={`text-sm font-bold ${t.isOpen ? 'text-white' : 'text-gray-500'}`}>{t.id}</span>
+                      <button onClick={() => toggleTableOpen(t.id)} className={`text-xs font-bold px-4 py-1.5 rounded transition-colors ${t.isOpen ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400 border border-gray-600'}`}>{t.isOpen ? 'OPEN' : 'CLOSED'}</button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2"><button onClick={() => setTableModalOpen(false)} className="w-full bg-[#d8b46e] text-black font-bold py-2.5 rounded transition">Done</button></div>
+              </div>
+            </div>
+          ) : null}
+
+          {dialog ? (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+              <div className="bg-[#1e293b] border border-[#D8B673] p-6 rounded-xl shadow-2xl max-w-sm w-full text-center">
+                <h3 className="text-lg sm:text-xl font-bold text-[#D8B673] mb-4">{dialog.title}</h3>
+                <p className="text-white mb-4 text-sm sm:text-base leading-relaxed whitespace-pre-wrap">{dialog.message}</p>
+                {dialog.input !== undefined ? <input type={dialog.inputType || "text"} id="dialog-input" defaultValue={dialog.input} placeholder={dialog.inputPlaceholder || ""} className={`w-full bg-black border border-gray-600 rounded p-2 text-white focus:outline-none focus:border-[#D8B673] ${dialog.input2 !== undefined ? 'mb-3' : 'mb-6'}`} /> : null}
+                {dialog.input2 !== undefined ? <input type={dialog.inputType2 || "password"} id="dialog-input-2" defaultValue={dialog.input2} placeholder={dialog.inputPlaceholder2 || ""} className="w-full bg-black border border-gray-600 rounded p-2 text-white mb-6 focus:outline-none focus:border-[#D8B673]" /> : null}
+                <div className="flex flex-col sm:flex-row gap-3 justify-center mt-4">
+                  {dialog.type === 'confirm' || dialog.input !== undefined ? <button onClick={dialog.onCancel} className="flex-1 bg-gray-800 text-gray-300 py-2.5 rounded-lg hover:bg-gray-700 transition border border-gray-600 font-bold">{dialog.cancelText || 'Cancel'}</button> : null}
+                  <button onClick={dialog.onConfirm} className={`flex-1 py-2.5 rounded-lg font-bold transition ${dialog.confirmStyle === 'danger' ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-[#D8B673] hover:bg-[#c29e5a] text-black'}`}>{dialog.confirmText || 'OK'}</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
