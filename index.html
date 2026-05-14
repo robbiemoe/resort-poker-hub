@@ -99,7 +99,7 @@
     // --- SVG Icons ---
     const Icons = {
       Clock: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
-      Alert: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>,
+      Alert: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77-1.333.192 3 1.732 3z"></path></svg>,
       Download: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>,
       Shield: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>,
       ChevronDown: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>,
@@ -110,6 +110,46 @@
       Camera: () => <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>,
       Upload: () => <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>,
       Cloud: () => <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+    };
+
+    // --- Gemini Vision API Integration ---
+    const callGeminiVisionAPI = async (base64Data, mimeType, prompt, schema) => {
+        const apiKey = ""; 
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+        const payload = {
+            contents: [{
+                role: "user",
+                parts: [
+                    { text: prompt },
+                    { inlineData: { mimeType: mimeType, data: base64Data } }
+                ]
+            }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: schema
+            }
+        };
+
+        const delay = (ms) => new Promise(res => setTimeout(res, ms));
+        const backoffs = [1000, 2000, 4000, 8000, 16000];
+
+        for (let i = 0; i <= backoffs.length; i++) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) throw new Error("No text returned from Gemini API");
+                return JSON.parse(text);
+            } catch (error) {
+                if (i === backoffs.length) throw error;
+                await delay(backoffs[i]);
+            }
+        }
     };
 
     // --- Sub-Components Definitions ---
@@ -175,8 +215,9 @@
           const interval = setInterval(() => {
             const elapsed = Date.now() - q.callingStartedAt;
             const remaining = Math.max(0, CALLING_TIME_LIMIT_MS - elapsed);
-            if (remaining <= 0) setTimeLeft('0:00');
-            else {
+            if (remaining <= 0) {
+              setTimeLeft('0:00');
+            } else {
               const mins = Math.floor(remaining / 60000);
               const secs = Math.floor((remaining % 60000) / 1000);
               setTimeLeft(`${mins}:${secs.toString().padStart(2, '0')}`);
@@ -189,14 +230,26 @@
       const isOverride = q.status === 'Calling' && !q.guestReply;
       const isHighlighted = highlightedPhone && highlightedPhone === q.phone;
 
+      const handleDragOver = (e) => {
+          e.preventDefault();
+          e.currentTarget.classList.add('border-t-2', 'border-blue-400');
+      };
+      const handleDragLeave = (e) => {
+          e.currentTarget.classList.remove('border-t-2', 'border-blue-400');
+      };
+      const handleDrop = (e) => {
+          e.currentTarget.classList.remove('border-t-2', 'border-blue-400');
+          handleDropToQueueItem(e, q.id, b.prefix);
+      };
+
       return (
         <div 
           className={`flex flex-col ${isHighlighted ? 'bg-yellow-900/40 border-yellow-500' : isSeated ? 'bg-[#064e3b] border-[#047857]' : 'bg-[#111827] border-[#334155]'} rounded overflow-hidden draggable-item transition-all h-max`}
           draggable={true}
           onDragStart={(e) => handleDragStartQueue(e, q.id)}
-          onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-t-2', 'border-blue-400'); }}
-          onDragLeave={(e) => e.currentTarget.classList.remove('border-t-2', 'border-blue-400')}
-          onDrop={(e) => { e.currentTarget.classList.remove('border-t-2', 'border-blue-400'); handleDropToQueueItem(e, q.id, b.prefix); }}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         >
           <div 
             className={`flex justify-between items-center p-2.5 cursor-pointer ${isHighlighted ? 'hover:bg-yellow-800/60' : isSeated ? 'hover:bg-[#065f46]' : 'hover:bg-[#1e293b]'} select-none ${expandedQId === q.id ? (isHighlighted ? 'bg-yellow-800/60' : isSeated ? 'bg-[#065f46]' : 'bg-[#1e293b]') : ''}`}
@@ -285,8 +338,7 @@
                if (selectedTable && selectedTable.blindPrefix) {
                    const blindMatch = BLINDS.find(b => b.prefix === selectedTable.blindPrefix);
                    if (blindMatch) {
-                       const simpleBlind = blindMatch.blind.replace(/\$/g, '').replace(/ /g, '').replace('|', '/');
-                       row.blind = simpleBlind;
+                       row.blind = blindMatch.blind.replace(/\$/g, '').replace(/ /g, '').replace('|', '/');
                        if (!row.reqTime) row.reqTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
                    }
                }
@@ -436,14 +488,10 @@
                          </select>
                       </td>
                       <td className="p-1">
-                         <input 
-                            type="text" value={row.player} onChange={e => handleChange(originalIndex, 'player', e.target.value)} 
-                            onBlur={e => { if (e.target.value && onCheckPenalty) onCheckPenalty(e.target.value, null, () => handleChange(originalIndex, 'player', '')); }}
-                            className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300 font-medium" 
-                         />
+                         <input type="text" value={row.player} onChange={e => handleChange(originalIndex, 'player', e.target.value)} onBlur={e => { if (e.target.value && onCheckPenalty) onCheckPenalty(e.target.value, null, () => handleChange(originalIndex, 'player', '')); }} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300 font-medium" />
                       </td>
                       <td className="p-1">
-                         <input type="text" value={row.reqTime} onChange={e => handleChange(originalIndex, 'reqTime', e.target.value)} className="w-full h-full p-1.5 sm:p-2 text-center bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-400 text-xs sm:text-sm rounded border border-transparent hover:border-gray-300" placeholder="--:--" />
+                         <input type="text" value={row.reqTime} onChange={e => handleChange(originalIndex, 'reqTime', e.target.value)} className="w-full h-full p-1.5 sm:p-2 text-center bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-300 text-xs sm:text-sm rounded border border-transparent hover:border-gray-300" placeholder="--:--" />
                       </td>
                       <td className="p-1">
                          <select value={row.status} onChange={e => handleChange(originalIndex, 'status', e.target.value)} className={statusColorClass + " border border-transparent hover:border-gray-300"}>
@@ -452,21 +500,11 @@
                          </select>
                       </td>
                       <td className="p-1">
-                         <input type="text" value={row.movedTime} onChange={e => handleChange(originalIndex, 'movedTime', e.target.value)} className="w-full h-full p-1.5 sm:p-2 text-center bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-400 text-xs sm:text-sm rounded border border-transparent hover:border-gray-300" placeholder="--:--" />
+                         <input type="text" value={row.movedTime} onChange={e => handleChange(originalIndex, 'movedTime', e.target.value)} className="w-full h-full p-1.5 sm:p-2 text-center bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-300 text-xs sm:text-sm rounded border border-transparent hover:border-gray-300" placeholder="--:--" />
                       </td>
                       <td className="p-1">
                          <div className="flex flex-col gap-0.5 w-full h-full bg-transparent rounded focus-within:ring-2 focus-within:ring-blue-500 border border-transparent hover:border-gray-300">
-                             <select 
-                                 className="w-full bg-gray-200 text-gray-700 text-[10px] sm:text-xs rounded outline-none cursor-pointer" value=""
-                                 onChange={e => {
-                                     if (e.target.value !== '') {
-                                         if (e.target.value === '1hr' || e.target.value === '2hr') {
-                                            onApplyPenalty(originalIndex, row, e.target.value === '1hr' ? 1 : 2);
-                                         }
-                                         e.target.value = '';
-                                     }
-                                 }}
-                             >
+                             <select className="w-full bg-gray-200 text-gray-700 text-[10px] sm:text-xs rounded outline-none cursor-pointer" value="" onChange={e => { if (e.target.value !== '') { if (e.target.value === '1hr' || e.target.value === '2hr') onApplyPenalty(originalIndex, row, e.target.value === '1hr' ? 1 : 2); e.target.value = ''; } }}>
                                  <option value="">Quick Remark...</option>
                                  <option value="1hr">Cancel 1 hr cannot queue</option>
                                  <option value="2hr">Cancel 2 hrs cannot queue</option>
@@ -475,7 +513,7 @@
                          </div>
                       </td>
                       <td className="p-1 text-center">
-                         {(row.player || row.table || row.blind || row.status) ? <button onClick={() => requestDelete(originalIndex, row)} className="bg-red-600 text-white px-2 py-1.5 m-1 text-[10px] sm:text-xs rounded hover:bg-red-500 font-bold transition shadow">Clear</button> : null}
+                         {(row.player || row.table || row.blind || row.status) ? <button onClick={() => requestDelete(originalIndex, row)} className="bg-red-600 text-white px-2 py-1 m-1 text-[10px] sm:text-xs rounded hover:bg-red-500 font-bold transition">Clear</button> : null}
                       </td>
                     </tr>
                   )
@@ -527,7 +565,6 @@
                         else if (queue?.status === 'Arrived') cellClass += "bg-[#4ADE80] text-black shadow-inner"; 
                         else if (queue) cellClass += "text-[#4ADE80]"; 
                         else cellClass += "text-transparent";
-
                         return <td key={b.prefix} className={cellClass}>{queue ? queue.id : ''}</td>;
                       })}
                     </tr>
@@ -544,6 +581,7 @@
       const [tab, setTab] = useState('live'); 
       const [editDay, setEditDay] = useState(1); 
       const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      
       const td = new Date(now);
       if (td.getHours() < 4) td.setDate(td.getDate() - 1);
       const currentDayIdx = td.getDay();
@@ -669,6 +707,12 @@
         setEntries(newEntries);
       };
 
+      const updateEntry = (index, field, value) => {
+        const newEntries = [...entries];
+        newEntries[index][field] = value;
+        setEntries(newEntries);
+      };
+
       const addEntry = () => { if (entries.length < 3) setEntries([...entries, { qNum: '', blindIdx: 0 }]); };
       const removeEntry = (index) => setEntries(entries.filter((_, i) => i !== index));
       const isFormValid = entries.some(e => e.qNum.trim() !== '') && nickName.trim() !== '' && phone.length >= 4;
@@ -776,7 +820,9 @@
            if (upperVal.length >= 1) {
               const prefix = upperVal.charAt(0);
               const blindIndex = visibleBlinds.findIndex(b => b.prefix === prefix);
-              if (blindIndex !== -1) next[index].blindIdx = blindIndex;
+              if (blindIndex !== -1) {
+                 next[index].blindIdx = blindIndex;
+              }
            }
            return next;
         });
@@ -785,31 +831,54 @@
       const processCapturedImage = async (base64Data, mimeType, type) => {
         setActiveCamera(null);
         setIsProcessing(true);
+
         try {
             if (type === 'ticket') {
                 const prompt = `Extract the queue numbers and the last 4 digits of the phone number from this ticket. The phone number usually looks like 'XXXXXXX1234'. Return ONLY a valid JSON object. Example: {"queues": ["A0050", "B0043"], "phoneLast4": "4263"}`;
-                const schema = { type: "OBJECT", properties: { queues: { type: "ARRAY", items: { type: "STRING" } }, phoneLast4: { type: "STRING" } } };
+                const schema = {
+                    type: "OBJECT",
+                    properties: {
+                        queues: { type: "ARRAY", items: { type: "STRING" } },
+                        phoneLast4: { type: "STRING" }
+                    }
+                };
+                
                 const result = await callGeminiVisionAPI(base64Data, mimeType, prompt, schema);
+
                 if (result && result.queues && result.queues.length > 0) {
                     const newEntries = [];
                     result.queues.slice(0, 3).forEach((qNum) => {
                         const prefix = qNum.charAt(0).toUpperCase();
                         const bIdx = visibleBlinds.findIndex(b => b.prefix === prefix);
+                        const mName = entries[0]?.memberName || '';
+                        const mId = entries[0]?.memberId || '';
+                        const nName = entries[0]?.nickName || '';
+                        
                         newEntries.push({
                            qNum: qNum.toUpperCase(),
-                           nickName: entries[0]?.nickName || '',
-                           memberName: entries[0]?.memberName || '',
-                           memberId: entries[0]?.memberId || '',
+                           nickName: nName,
+                           memberName: mName,
+                           memberId: mId,
                            blindIdx: bIdx !== -1 ? bIdx : 0
                         });
                     });
                     setEntries(newEntries);
                 }
-                if (result && result.phoneLast4) setPhone(result.phoneLast4);
+                if (result && result.phoneLast4) {
+                    setPhone(result.phoneLast4);
+                }
             } else if (type === 'card') {
                 const prompt = `Extract the Member Name and 11-digit Member ID from this membership card. Return ONLY a valid JSON object. Example: {"memberName": "JOHN DOE", "memberId": "81860003456"}`;
-                const schema = { type: "OBJECT", properties: { memberName: { type: "STRING" }, memberId: { type: "STRING" } } };
+                const schema = {
+                    type: "OBJECT",
+                    properties: {
+                        memberName: { type: "STRING" },
+                        memberId: { type: "STRING" }
+                    }
+                };
+                
                 const result = await callGeminiVisionAPI(base64Data, mimeType, prompt, schema);
+
                 if (result && (result.memberName || result.memberId)) {
                     const firstName = result.memberName ? result.memberName.split(' ')[0] : '';
                     setEntries(prev => prev.map(entry => ({
@@ -821,7 +890,7 @@
                 }
             }
         } catch (error) {
-            dialogFn({ type: 'alert', title: 'Scan Failed', message: 'Could not automatically read the information.', onConfirm: () => dialogFn(null) });
+            dialogFn({ type: 'alert', title: 'Scan Failed', message: 'Could not automatically read the information. Please adjust lighting and try again, or type it manually.', onConfirm: () => dialogFn(null) });
         } finally {
             setIsProcessing(false);
         }
@@ -841,7 +910,11 @@
 
       const removeEntry = (index) => setEntries(entries.filter((_, i) => i !== index));
       const updateEntry = (index, field, value) => {
-        setEntries(prev => { const next = [...prev]; next[index][field] = value; return next; });
+        setEntries(prev => {
+           const next = [...prev];
+           next[index][field] = value;
+           return next;
+        });
       };
 
       const isValidEntry = (e) => {
@@ -853,20 +926,39 @@
       const handleSubmit = () => {
         const validEntries = entries.filter(isValidEntry);
         if (validEntries.length > 0 && phone.length >= 4) {
-          const mapped = validEntries.map(e => ({ qNum: e.qNum, nickName: e.nickName, memberName: e.memberName, memberId: e.memberId, blindObj: visibleBlinds[e.blindIdx] }));
+          const mapped = validEntries.map(e => ({ 
+              qNum: e.qNum, 
+              nickName: e.nickName, 
+              memberName: e.memberName,
+              memberId: e.memberId,
+              blindObj: visibleBlinds[e.blindIdx] 
+          }));
           onSubmit(mapped, phone);
-        } else dialogFn({ type: 'alert', title: 'Error', message: 'Please fill all required fields.', onConfirm: () => dialogFn(null) });
+        } else {
+           dialogFn({ type: 'alert', title: 'Error', message: 'Please fill all required fields.', onConfirm: () => dialogFn(null) });
+        }
       };
 
       const isFormValid = entries.some(isValidEntry) && phone.length >= 4;
 
       return (
         <div className="max-w-md mx-auto mt-4 sm:mt-10 bg-gray-900 p-5 sm:p-8 rounded-xl border border-gray-800 shadow-2xl relative">
-          {activeCamera ? <CameraScanner title={activeCamera === 'ticket' ? "Scan Queue Ticket" : "Scan Member Card"} type={activeCamera} onClose={() => setActiveCamera(null)} onCapture={(base64, mimeType) => processCapturedImage(base64, mimeType, activeCamera)} /> : null}
+          
+          {activeCamera ? (
+             <CameraScanner 
+                title={activeCamera === 'ticket' ? "Scan Queue Ticket" : "Scan Member Card"}
+                type={activeCamera}
+                onClose={() => setActiveCamera(null)}
+                onCapture={(base64, mimeType) => processCapturedImage(base64, mimeType, activeCamera)}
+             />
+          ) : null}
+
           {isProcessing ? (
              <div className="absolute inset-0 bg-black/80 z-[60] flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
                 <div className="ai-spinner mb-4"></div>
-                <p className="text-[#D8B673] font-bold tracking-widest text-sm uppercase text-center px-4">Analyzing Image...</p>
+                <p className="text-[#D8B673] font-bold tracking-widest text-sm uppercase text-center px-4">
+                    Analyzing Image...
+                </p>
              </div>
           ) : null}
 
@@ -875,15 +967,30 @@
           
           {requireMemberInfo ? (
             <div className="flex gap-2 mb-6">
-              <button onClick={() => setActiveCamera('ticket')} className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg"><Icons.Camera /><span className="text-[10px] sm:text-xs font-bold">Scan Queue Ticket</span></button>
-              <button onClick={() => setActiveCamera('card')} className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg"><Icons.Camera /><span className="text-[10px] sm:text-xs font-bold">Scan Member Card</span></button>
+              <button 
+                onClick={() => setActiveCamera('ticket')} 
+                className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg"
+              >
+                  <Icons.Camera />
+                  <span className="text-[10px] sm:text-xs font-bold">Scan Queue Ticket</span>
+              </button>
+
+              <button 
+                onClick={() => setActiveCamera('card')} 
+                className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg"
+              >
+                  <Icons.Camera />
+                  <span className="text-[10px] sm:text-xs font-bold">Scan Member Card</span>
+              </button>
             </div>
           ) : null}
 
           <div className="space-y-4">
             {entries.map((entry, index) => (
               <div key={index} className="p-3 sm:p-4 bg-black border border-gray-700 rounded-lg relative">
-                {index > 0 ? <button onClick={() => removeEntry(index)} className="absolute top-2 right-2 text-red-500 text-xs font-bold hover:text-red-400 bg-red-900/20 px-2 py-1 rounded">Remove</button> : null}
+                {index > 0 ? (
+                  <button onClick={() => removeEntry(index)} className="absolute top-2 right-2 text-red-500 text-xs font-bold hover:text-red-400 bg-red-900/20 px-2 py-1 rounded">Remove</button>
+                ) : null}
                 <div className="mb-3 grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">Queue {index + 1}</label>
@@ -892,14 +999,18 @@
                   <div>
                     <label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">Select Blind</label>
                     <select value={entry.blindIdx} onChange={(e) => updateEntry(index, 'blindIdx', Number(e.target.value))} className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-[#D8B673]">
-                      {visibleBlinds.map((b, idx) => <option key={b.prefix} value={idx}>{b.prefix} - {b.blind} (Buy-in: {b.buyIn})</option>)}
+                      {visibleBlinds.map((b, idx) => (
+                        <option key={b.prefix} value={idx}>{b.prefix} - {b.blind} (Buy-in: {b.buyIn})</option>
+                      ))}
                     </select>
                   </div>
                 </div>
+
                 <div className="mb-3">
                   <label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">Nick Name</label>
                   <input type="text" value={entry.nickName} onChange={(e) => updateEntry(index, 'nickName', e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-[#D8B673] font-bold tracking-wider" placeholder="e.g. John" />
                 </div>
+
                 {requireMemberInfo ? (
                   <div className="mb-3 grid grid-cols-2 gap-2">
                     <div>
@@ -912,13 +1023,19 @@
                     </div>
                   </div>
                 ) : null}
+
               </div>
             ))}
-            {entries.length < 3 ? <button onClick={addEntry} className="w-full py-3 border border-dashed border-gray-600 text-gray-400 rounded-lg hover:bg-gray-800 hover:text-white transition text-sm font-bold">+ Add Another Blinds</button> : null}
+
+            {entries.length < 3 ? (
+              <button onClick={addEntry} className="w-full py-3 border border-dashed border-gray-600 text-gray-400 rounded-lg hover:bg-gray-800 hover:text-white transition text-sm font-bold">+ Add Another Blinds</button>
+            ) : null}
+
             <div className="pt-2">
               <label className="block text-xs sm:text-sm text-gray-300 mb-1 font-medium">Phone Number Last 4 Digits (Password)</label>
               <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} className="w-full bg-black border border-gray-700 rounded-lg p-2.5 text-white text-base focus:outline-none focus:border-[#D8B673] tracking-wider" placeholder="e.g. 4263" />
             </div>
+            
             <button onClick={handleSubmit} disabled={!isFormValid} className="w-full mt-6 bg-[#D8B673] hover:bg-[#c29e5a] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-3 rounded-lg transition text-base">Track My Status</button>
           </div>
         </div>
@@ -984,7 +1101,9 @@
           });
           alertedNext.current = true;
         }
-        if (queue?.status !== 'Next') alertedNext.current = false;
+        if (queue?.status !== 'Next') {
+          alertedNext.current = false;
+        }
 
         if (queue?.status === 'Calling' && queue?.callingStartedAt) {
           const interval = setInterval(() => {
@@ -1088,7 +1207,6 @@
       const [now, setNow] = useState(new Date());
       const [isSyncing, setIsSyncing] = useState(false);
       
-      // React State
       const [queues, setQueues] = useState([]);
       const [history, setHistory] = useState([]);
       const [pmlData, setPmlData] = useState([]);
@@ -1099,18 +1217,7 @@
       const [penalties, setPenalties] = useState([]);
       const [requireConfirm, setRequireConfirm] = useState(false);
       const [requireMemberInfo, setRequireMemberInfo] = useState(false);
-      const [autoBlindEnabled, setAutoBlindEnabled] = useState(true);
-      const [weeklyPresets, setWeeklyPresets] = useState(DEFAULT_BLIND_PRESETS);
 
-      // Cloud State Handlers
-      const localLastModified = useRef(0);
-      const fullStateRef = useRef({
-        queues: [], history: [], pmlData: [], pmlHistory: [], tables: [],
-        blindVis: {}, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS,
-        autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false
-      });
-
-      // Admin Layout States
       const [adminLayoutMode, setAdminLayoutMode] = useState('both'); 
       const [isAdminControlsExpanded, setIsAdminControlsExpanded] = useState(false); 
       const [expandedQId, setExpandedQId] = useState(null);
@@ -1125,6 +1232,16 @@
       const [adminRegisterOpen, setAdminRegisterOpen] = useState(false);
       const [resetModalOpen, setResetModalOpen] = useState(false);
       const [showNewDayReminder, setShowNewDayReminder] = useState(false);
+      
+      const [autoBlindEnabled, setAutoBlindEnabled] = useState(true);
+      const [weeklyPresets, setWeeklyPresets] = useState(DEFAULT_BLIND_PRESETS);
+
+      const localLastModified = useRef(0);
+      const fullStateRef = useRef({
+        queues: [], history: [], pmlData: [], pmlHistory: [], tables: [],
+        blindVis: {}, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS,
+        autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false
+      });
 
       const updateCloudState = async (updates) => {
         const newState = { ...fullStateRef.current, ...updates, lastModified: Date.now() };
@@ -1160,7 +1277,6 @@
         }
       };
 
-      // Load initial data and Smart Polling
       useEffect(() => {
         const timerNow = setInterval(() => setNow(new Date()), 1000);
 
@@ -1173,7 +1289,6 @@
               const data = await res.json();
               
               if (!data.tables || data.tables.length === 0) {
-                // Initialize Defaults on first run
                 const emptyPml = Array.from({length: 30}, () => ({ table: '', seat: '', blind: '', player: '', reqTime: '', status: '', movedTime: '', remark: '' }));
                 const initialTables = Array.from({ length: 12 }).map((_, i) => ({ id: `E05-NL${(i + 1).toString().padStart(2, '0')}`, blindPrefix: '', isOpen: i < 4, seats: Array(10).fill(null) }));
                 const initialVis = {};
@@ -1205,19 +1320,23 @@
             console.error("Failed to fetch cloud data:", err);
             const localBackup = JSON.parse(localStorage.getItem('poker_cloud_backup'));
             if (localBackup && localBackup.lastModified > localLastModified.current) {
-                // Fallback to local
                 localLastModified.current = localBackup.lastModified;
                 fullStateRef.current = { ...fullStateRef.current, ...localBackup };
                 setQueues(localBackup.queues || []);
                 setHistory(localBackup.history || []);
                 setTables(localBackup.tables || []);
-                // etc...
+                setBlindVis(localBackup.blindVis || {});
+                setPmlData(localBackup.pmlData || []);
+                setPmlHistory(localBackup.pmlHistory || []);
+                setPenalties(localBackup.penalties || []);
+                if (localBackup.weeklyPresets) setWeeklyPresets(localBackup.weeklyPresets);
+                if (localBackup.autoBlindEnabled !== undefined) setAutoBlindEnabled(localBackup.autoBlindEnabled);
             }
           }
         };
 
-        fetchCloudData(); // Initial load
-        const syncInterval = setInterval(fetchCloudData, 3000); // Smart Poll every 3 seconds
+        fetchCloudData(); 
+        const syncInterval = setInterval(fetchCloudData, 3000); 
 
         const checkNewDay = () => {
             const currentDate = new Date();
@@ -1497,7 +1616,7 @@
             try {
                 const bstr = evt.target.result;
                 const wb = XLSX.read(bstr, { type: 'binary' });
-                if (!wb.Sheets['RawData']) throw new Error('No Recovery Data found!');
+                if (!wb.Sheets['RawData']) throw new Error('No Recovery Data found! Make sure you are uploading a valid backup Excel file generated by this system.');
                 
                 const rawDataArray = XLSX.utils.sheet_to_json(wb.Sheets['RawData'], { header: 1 });
                 const jsonRow = rawDataArray.find(row => row[0] === 'DATA');
@@ -1810,16 +1929,18 @@
           newTables[tIdx].seats[targetSeatIdx] = q;
           
           const newQueues = queues.filter(x => x.id !== qId);
-          updateCloudState({ tables: newTables, queues: newQueues });
 
           const playerStr = `${q.id} (${q.nickName})`;
+          let changedPml = false;
           const newPmlData = pmlData.map(row => {
               if (row.player === playerStr && row.status !== 'Completed' && row.status !== 'Cancel') {
+                  changedPml = true;
                   return { ...row, status: 'Completed', movedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) };
               }
               return row;
           });
-          updateCloudState({ pmlData: newPmlData });
+
+          updateCloudState({ tables: newTables, queues: newQueues, pmlData: changedPml ? newPmlData : undefined });
 
         } else if (source === 'seat') {
           const sourceTId = e.dataTransfer.getData('tId');
@@ -1842,35 +1963,31 @@
           newTables[targetTableIdx].seats[targetSeatIdx] = playerToMove;
           
           const playerStr = `${playerToMove.id} (${playerToMove.nickName})`;
+          let changedPml = false;
           const newPmlData = pmlData.map(row => {
               if (row.player === playerStr && row.status !== 'Completed' && row.status !== 'Cancel') {
+                  changedPml = true;
                   return { ...row, status: 'Completed', movedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) };
               }
               return row;
           });
 
-          updateCloudState({ tables: newTables, pmlData: newPmlData });
+          updateCloudState({ tables: newTables, pmlData: changedPml ? newPmlData : undefined });
         }
       };
 
       const removePlayerFromSeat = (tableIndex, seatIndex, player) => {
         setDialog({
-          type: 'confirm',
-          title: 'Confirm Remove?',
-          message: `Remove ${player.nickName || player.id} from ${tables[tableIndex].id} ${seatIndex < 9 ? 'Seat ' + (seatIndex + 1) : 'Spare'}?`,
-          confirmStyle: 'danger',
+          type: 'confirm', title: 'Confirm Remove?', message: `Remove ${player.nickName || player.id} from ${tables[tableIndex].id} ${seatIndex < 9 ? 'Seat ' + (seatIndex + 1) : 'Spare'}?`, confirmStyle: 'danger',
           onConfirm: () => {
              const newTables = [...tables];
              newTables[tableIndex].seats[seatIndex] = null;
-             
              const endedAt = Date.now();
              const durationMins = ((endedAt - player.createdAt) / 60000).toFixed(2);
              const historyRecord = { ...player, status: 'Completed (Table)', endedAt, duration: `${durationMins} mins`, adminId: adminName };
-             
              updateCloudState({ tables: newTables, history: [...history, historyRecord] });
              setDialog(null);
-          },
-          onCancel: () => setDialog(null)
+          }, onCancel: () => setDialog(null)
         });
       };
 
