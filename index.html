@@ -99,7 +99,7 @@
     // --- SVG Icons ---
     const Icons = {
       Clock: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
-      Alert: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77-1.333.192 3 1.732 3z"></path></svg>,
+      Alert: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>,
       Download: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>,
       Shield: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>,
       ChevronDown: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>,
@@ -1065,20 +1065,31 @@
       );
     }
 
-    function AdminLogin({ onLogin, onCancel }) {
+    function AdminLogin({ onLogin, onCancel, adminLock }) {
       const [pass, setPass] = useState('');
       const [error, setError] = useState('');
 
       const handleLogin = () => {
-        if (pass === ADMIN_PASSWORD) onLogin();
-        else setError('Invalid Password');
+        if (pass === 'Master8888') { 
+            onLogin(true); 
+            return;
+        }
+        if (pass === ADMIN_PASSWORD) {
+            if (adminLock?.isLocked) {
+                setError(`Dashboard is LOCKED by ${adminLock.lockedBy || 'another Supervisor'}. Cannot login.`);
+            } else {
+                onLogin(false);
+            }
+        } else {
+            setError('Invalid Password');
+        }
       };
 
       return (
         <div className="max-w-sm mx-auto mt-10 sm:mt-20 bg-gray-900 p-5 sm:p-6 rounded-xl border border-gray-700 shadow-2xl">
-          <h2 className="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2 text-[#D8B673]"><Icons.Shield/> Resort Poker Hub - Admin</h2>
+          <h2 className="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2 text-[#D8B673]"><Icons.Shield/> Poker Counter Login</h2>
           <input type="password" value={pass} onChange={(e) => { setPass(e.target.value); setError(''); }} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} className="w-full bg-black border border-gray-700 rounded-lg p-3 text-white text-base sm:text-lg focus:outline-none focus:border-[#D8B673] mb-2" placeholder="Enter Password" />
-          {error ? <p className="text-red-400 text-sm mb-4">{error}</p> : null}
+          {error ? <p className="text-red-400 text-sm mb-4 font-bold">{error}</p> : null}
           <div className="flex flex-col sm:flex-row gap-2 mt-4">
             <button onClick={handleLogin} className="flex-1 bg-[#D8B673] hover:bg-[#c29e5a] text-black font-bold py-3 rounded-lg transition">Login</button>
             <button onClick={onCancel} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition border border-gray-600">Cancel</button>
@@ -1217,6 +1228,7 @@
       const [penalties, setPenalties] = useState([]);
       const [requireConfirm, setRequireConfirm] = useState(false);
       const [requireMemberInfo, setRequireMemberInfo] = useState(false);
+      const [adminLock, setAdminLock] = useState({ isLocked: false, lockedBy: '' });
 
       const [adminLayoutMode, setAdminLayoutMode] = useState('both'); 
       const [isAdminControlsExpanded, setIsAdminControlsExpanded] = useState(false); 
@@ -1227,7 +1239,11 @@
       const [restoreModalOpen, setRestoreModalOpen] = useState(false);
       const [selectedRestores, setSelectedRestores] = useState([]);
       const [showLiveBoard, setShowLiveBoard] = useState(false); 
-      const [collapsedBlinds, setCollapsedBlinds] = useState({});
+      const [collapsedBlinds, setCollapsedBlinds] = useState(() => {
+        const initial = {};
+        BLINDS.forEach(b => initial[b.prefix] = true);
+        return initial;
+      });
       const [highlightedPhone, setHighlightedPhone] = useState(null);
       const [adminRegisterOpen, setAdminRegisterOpen] = useState(false);
       const [resetModalOpen, setResetModalOpen] = useState(false);
@@ -1240,7 +1256,8 @@
       const fullStateRef = useRef({
         queues: [], history: [], pmlData: [], pmlHistory: [], tables: [],
         blindVis: {}, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS,
-        autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false
+        autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false,
+        adminLock: { isLocked: false, lockedBy: '' }
       });
 
       const updateCloudState = async (updates) => {
@@ -1260,6 +1277,7 @@
         if (updates.adminName !== undefined) setAdminName(updates.adminName);
         if (updates.requireConfirm !== undefined) setRequireConfirm(updates.requireConfirm);
         if (updates.requireMemberInfo !== undefined) setRequireMemberInfo(updates.requireMemberInfo);
+        if (updates.adminLock !== undefined) setAdminLock(updates.adminLock);
 
         localStorage.setItem('poker_cloud_backup', JSON.stringify(newState));
 
@@ -1294,7 +1312,7 @@
                 const initialVis = {};
                 BLINDS.forEach(b => initialVis[b.prefix] = (b.prefix !== 'D' && b.prefix !== 'G'));
 
-                updateCloudState({ queues: [], history: [], pmlData: emptyPml, pmlHistory: [], tables: initialTables, blindVis: initialVis, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS, autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false });
+                updateCloudState({ queues: [], history: [], pmlData: emptyPml, pmlHistory: [], tables: initialTables, blindVis: initialVis, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS, autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false, adminLock: { isLocked: false, lockedBy: '' } });
                 return;
               }
 
@@ -1314,6 +1332,7 @@
                 if (data.adminName) setAdminName(data.adminName);
                 if (data.requireConfirm !== undefined) setRequireConfirm(data.requireConfirm);
                 if (data.requireMemberInfo !== undefined) setRequireMemberInfo(data.requireMemberInfo);
+                if (data.adminLock !== undefined) setAdminLock(data.adminLock);
               }
             }
           } catch (err) {
@@ -1331,6 +1350,7 @@
                 setPenalties(localBackup.penalties || []);
                 if (localBackup.weeklyPresets) setWeeklyPresets(localBackup.weeklyPresets);
                 if (localBackup.autoBlindEnabled !== undefined) setAutoBlindEnabled(localBackup.autoBlindEnabled);
+                if (localBackup.adminLock !== undefined) setAdminLock(localBackup.adminLock);
             }
           }
         };
@@ -1537,6 +1557,31 @@
         }
       };
 
+      const autoCompletePml = (playerData) => {
+          if (!playerData) return;
+          const playerStr = `${playerData.id} (${playerData.nickName})`;
+          
+          setPmlData(prev => {
+              let changed = false;
+              const newData = prev.map(row => {
+                  if (row.player === playerStr && row.status !== 'Completed' && row.status !== 'Cancel') {
+                      changed = true;
+                      return { 
+                          ...row, 
+                          status: 'Completed', 
+                          movedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) 
+                      };
+                  }
+                  return row;
+              });
+              if (changed) {
+                  localStorage.setItem('poker_pml_v6', JSON.stringify(newData));
+                  return newData;
+              }
+              return prev;
+          });
+      };
+
       const triggerDownloads = (isSilent = false) => {
         let exported = false;
         const qData = [];
@@ -1582,7 +1627,7 @@
             pmlDataExport.push([ p.originalIndex + 1, p.table, p.seat || '', p.blind, `"${p.player || ''}"`, p.reqTime, p.status, p.movedTime, `"${p.remark || ''}"`, p.deletedAt ? `"${new Date(p.deletedAt).toLocaleString()}"` : '"N/A"', `"${p.adminId || ''}"` ]);
         });
 
-        const rawState = { queues, history, pmlData, pmlHistory, tables, blindVis, penalties, weeklyPresets, autoBlindEnabled };
+        const rawState = { queues, history, pmlData, pmlHistory, tables, blindVis, penalties, weeklyPresets, autoBlindEnabled, adminName, adminLock };
         const rawDataExport = [
             ['WARNING', 'DO NOT EDIT THIS SHEET. IT IS USED FOR SYSTEM RECOVERY.'],
             ['DATA', JSON.stringify(rawState)]
@@ -1713,6 +1758,34 @@
              return;
          }
          executeLogin(queueEntries, phone);
+      };
+
+      const handleAdminLoginSuccess = (forceUnlock = false) => {
+        setView('admin-dash');
+        if (forceUnlock) {
+            updateCloudState({ adminLock: { isLocked: false, lockedBy: '' } });
+        }
+        
+        if (adminName === 'Poker Supervisor/ EMPID') {
+            setTimeout(() => {
+                setDialog({
+                   type: 'prompt',
+                   title: 'Initial Security Setup',
+                   message: 'Please enter your Poker Supervisor Name / EMPID to secure the dashboard. This will auto-lock access for other devices.',
+                   input: '',
+                   confirmText: 'Save & Auto-Lock',
+                   onConfirm: () => {
+                      const val = document.getElementById('dialog-input').value.trim() || 'Poker Supervisor';
+                      updateCloudState({ 
+                          adminName: val,
+                          adminLock: { isLocked: true, lockedBy: val }
+                      });
+                      setDialog(null);
+                   },
+                   onCancel: () => setDialog(null) 
+                });
+            }, 300);
+        }
       };
 
       const handleAdminFastRegister = (queueEntries, phone) => {
@@ -1851,8 +1924,8 @@
           newTables[sourceTableIdx].seats[sIdx] = null;
           const newBlind = BLINDS.find(b => b.prefix === targetBlindPrefix);
           const newPlayer = { ...player, status: 'Confirmed', blindObj: newBlind, seatedAt: null };
-          
           updateCloudState({ tables: newTables, queues: [...queues, newPlayer] });
+          
         } else if (source === 'queue') {
           const draggedQId = e.dataTransfer.getData('qId');
           const qToMove = queues.find(q => q.id === draggedQId);
@@ -1889,6 +1962,7 @@
           const targetIdx = newQueues.findIndex(q => q.id === targetQId);
           newQueues.splice(targetIdx, 0, newPlayer);
           updateCloudState({ tables: newTables, queues: newQueues });
+
         } else if (source === 'queue') {
           const draggedQId = e.dataTransfer.getData('qId');
           if (draggedQId === targetQId) return;
@@ -2084,7 +2158,7 @@
             
             {view === 'guest-setup' ? <GuestSetupForm onSubmit={handleGuestLogin} visibleBlinds={visibleBlindsList} dialogFn={setDialog} requireMemberInfo={requireMemberInfo} /> : null}
             {view === 'guest-receipt' ? <ReceiptScreen queueIds={guestQueueIds} phone={guestPhone} date={justRegisteredDate} onContinue={() => setView('guest-dash')} /> : null}
-            {view === 'admin-login' ? <AdminLogin onLogin={() => setView('admin-dash')} onCancel={() => setView('guest-setup')} /> : null}
+            {view === 'admin-login' ? <AdminLogin onLogin={handleAdminLoginSuccess} onCancel={() => setView('guest-setup')} adminLock={adminLock} /> : null}
             
             {view === 'guest-dash' ? (
               <div className="max-w-[1400px] mx-auto space-y-4 sm:space-y-6">
@@ -2105,6 +2179,7 @@
               </div>
             ) : null}
 
+            {/* NEW ADMIN DASHBOARD LAYOUT */}
             {view === 'admin-dash' ? (
               <>
                 <div className="bg-[#1e293b] border-b border-[#334155] p-2 flex justify-between items-center z-30 relative">
@@ -2219,12 +2294,33 @@
                           <button 
                              onClick={() => {
                                 setDialog({
-                                   type: 'prompt', title: 'Update Supervisor Info', message: 'Enter Poker Supervisor Name / EMPID:', input: adminName === 'Poker Supervisor/ EMPID' ? '' : adminName, confirmText: 'Save',
-                                   onConfirm: () => { const val = document.getElementById('dialog-input').value || 'Poker Supervisor/ EMPID'; updateCloudState({ adminName: val }); setDialog(null); }, onCancel: () => setDialog(null)
+                                   type: 'prompt', title: 'Update Supervisor Info', message: 'Enter Poker Supervisor Name / EMPID:', input: adminName === 'Poker Supervisor/ EMPID' ? '' : adminName, confirmText: 'Save & Auto-Lock',
+                                   onConfirm: () => { 
+                                       const val = document.getElementById('dialog-input').value.trim() || 'Poker Supervisor/ EMPID'; 
+                                       updateCloudState({ 
+                                           adminName: val,
+                                           adminLock: { isLocked: true, lockedBy: val }
+                                       }); 
+                                       setDialog(null); 
+                                   }, 
+                                   onCancel: () => setDialog(null)
                                 });
                              }}
                              className="flex-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-xs py-2 px-3 rounded text-center shadow shadow-black/50 outline-none transition overflow-hidden whitespace-nowrap text-ellipsis"
                           >{adminName}</button>
+
+                          <button
+                            onClick={() => {
+                                const newLockState = !adminLock.isLocked;
+                                updateCloudState({ 
+                                  adminLock: { isLocked: newLockState, lockedBy: adminName } 
+                                });
+                            }}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded text-white font-bold text-xs shadow transition border shrink-0 ${adminLock.isLocked ? 'bg-green-700 hover:bg-green-600 border-green-500' : 'bg-red-700 hover:bg-red-600 border-red-500 animate-pulse'}`}
+                          >
+                            {adminLock.isLocked ? '🔒 Locked' : '🔓 Unlocked'}
+                          </button>
+
                           <button onClick={() => setIsAdminControlsExpanded(!isAdminControlsExpanded)} className="bg-gray-700 text-white p-2 rounded shadow hover:bg-gray-600 transition shrink-0">
                             {isAdminControlsExpanded ? <Icons.ChevronUp /> : <Icons.ChevronDown />}
                           </button>
