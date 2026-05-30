@@ -18,6 +18,10 @@
   <!-- SheetJS (xlsx) for Multiple Sheet Excel Exports -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+  <!-- FIREBASE COMPAT SDKs (Bypasses Babel require() errors) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
   <style>
     body {
       background-color: black;
@@ -67,10 +71,16 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // --- JSONBIN CLOUD API CONFIGURATION ---
-    const JSONBIN_BIN_ID = '6a04497fadc21f119a9324a4';
-    const JSONBIN_MASTER_KEY = '$2a$10$4NeR1k0kyus0zd7cUTvV0ebDHnJLoGDb67x3Yvh1KVZjFu47PGQRG';
-    const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
+    // --- FIREBASE CONFIGURATION ---
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyChZ5MPGfz8YE3L0ypv0F38mOSWGzYB3JU",
+      authDomain: "resort-poker-hub.firebaseapp.com",
+      databaseURL: "https://resort-poker-hub-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "resort-poker-hub",
+      storageBucket: "resort-poker-hub.firebasestorage.app",
+      messagingSenderId: "426708418079",
+      appId: "1:426708418079:web:9d002eab23dc355c009f2a"
+    };
 
     // --- Constants & Config ---
     const BLINDS = [
@@ -83,7 +93,7 @@
       { blind: '$100 | $200', buyIn: '$8,000 - No Limit', prefix: 'G' },
     ];
     const MAX_ROWS = 10;
-    const ADMIN_PASSWORD = 'Rws8888';
+    const ADMIN_PASSWORD = 'Admin8888';
     const CALLING_TIME_LIMIT_MS = 10 * 60 * 1000; 
 
     const DEFAULT_BLIND_PRESETS = {
@@ -99,7 +109,7 @@
     // --- SVG Icons ---
     const Icons = {
       Clock: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
-      Alert: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77-1.333.192 3 1.732 3z"></path></svg>,
+      Alert: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>,
       Download: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>,
       Shield: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>,
       ChevronDown: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>,
@@ -1072,7 +1082,7 @@
       const [error, setError] = useState('');
 
       const handleLogin = () => {
-        if (pass === 'MasterTGO8888') { 
+        if (pass === 'Master8888') { 
             onLogin(true); 
             return;
         }
@@ -1286,62 +1296,65 @@
 
         localStorage.setItem('poker_cloud_backup', JSON.stringify(newState));
 
-        try {
-          setIsSyncing(true);
-          await fetch(JSONBIN_URL, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_MASTER_KEY },
-            body: JSON.stringify(newState)
-          });
-        } catch (err) {
-          console.error("Cloud sync failed:", err);
-        } finally {
-          setIsSyncing(false);
+        if (FIREBASE_CONFIG.apiKey) {
+          try {
+            setIsSyncing(true);
+            const db = firebase.firestore();
+            await db.collection('pokerhub').doc('liveState').set(newState);
+          } catch (err) {
+            console.error("Firebase sync failed:", err);
+          } finally {
+            setIsSyncing(false);
+          }
         }
       };
 
       useEffect(() => {
         const timerNow = setInterval(() => setNow(new Date()), 1000);
+        let unsub = null;
 
-        const fetchCloudData = async () => {
-          try {
-            const res = await fetch(`${JSONBIN_URL}/latest`, { 
-              headers: { 'X-Master-Key': JSONBIN_MASTER_KEY, 'X-Bin-Meta': 'false', 'Cache-Control': 'no-cache' }
-            });
-            if (res.ok) {
-              const data = await res.json();
-              
-              if (!data.tables || data.tables.length === 0) {
-                const emptyPml = Array.from({length: 30}, () => ({ table: '', seat: '', blind: '', player: '', reqTime: '', status: '', movedTime: '', remark: '' }));
-                const initialTables = Array.from({ length: 12 }).map((_, i) => ({ id: `E05-NL${(i + 1).toString().padStart(2, '0')}`, blindPrefix: '', isOpen: i < 4, seats: Array(10).fill(null) }));
-                const initialVis = {};
-                BLINDS.forEach(b => initialVis[b.prefix] = (b.prefix !== 'D' && b.prefix !== 'G'));
-
-                updateCloudState({ queues: [], history: [], pmlData: emptyPml, pmlHistory: [], tables: initialTables, blindVis: initialVis, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS, autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false, adminLock: { isLocked: false, lockedBy: '' } });
-                return;
-              }
-
-              if (data.lastModified > localLastModified.current) {
-                localLastModified.current = data.lastModified;
-                fullStateRef.current = { ...fullStateRef.current, ...data };
-                
-                setQueues(data.queues || []);
-                setHistory(data.history || []);
-                setPmlData(data.pmlData || []);
-                setPmlHistory(data.pmlHistory || []);
-                setTables(data.tables || []);
-                setBlindVis(data.blindVis || {});
-                setPenalties(data.penalties || []);
-                if (data.weeklyPresets) setWeeklyPresets(data.weeklyPresets);
-                if (data.autoBlindEnabled !== undefined) setAutoBlindEnabled(data.autoBlindEnabled);
-                if (data.adminName) setAdminName(data.adminName);
-                if (data.requireConfirm !== undefined) setRequireConfirm(data.requireConfirm);
-                if (data.requireMemberInfo !== undefined) setRequireMemberInfo(data.requireMemberInfo);
-                if (data.adminLock !== undefined) setAdminLock(data.adminLock);
-              }
+        if (FIREBASE_CONFIG.apiKey) {
+            if (!firebase.apps.length) {
+                firebase.initializeApp(FIREBASE_CONFIG);
             }
-          } catch (err) {
-            console.error("Failed to fetch cloud data:", err);
+            const db = firebase.firestore();
+            const docRef = db.collection('pokerhub').doc('liveState');
+
+            unsub = docRef.onSnapshot((docSnap) => {
+                if (docSnap.exists) {
+                    const data = docSnap.data();
+                    if (data.lastModified > localLastModified.current) {
+                        localLastModified.current = data.lastModified;
+                        fullStateRef.current = { ...fullStateRef.current, ...data };
+
+                        if(data.queues) setQueues(data.queues);
+                        if(data.history) setHistory(data.history);
+                        if(data.pmlData) setPmlData(data.pmlData);
+                        if(data.pmlHistory) setPmlHistory(data.pmlHistory);
+                        if(data.tables) setTables(data.tables);
+                        if(data.blindVis) setBlindVis(data.blindVis);
+                        if(data.penalties) setPenalties(data.penalties);
+                        if(data.weeklyPresets) setWeeklyPresets(data.weeklyPresets);
+                        if(data.autoBlindEnabled !== undefined) setAutoBlindEnabled(data.autoBlindEnabled);
+                        if(data.adminName) setAdminName(data.adminName);
+                        if(data.requireConfirm !== undefined) setRequireConfirm(data.requireConfirm);
+                        if(data.requireMemberInfo !== undefined) setRequireMemberInfo(data.requireMemberInfo);
+                        if(data.adminLock) setAdminLock(data.adminLock);
+                    }
+                } else {
+                    const emptyPml = Array.from({length: 30}, () => ({ table: '', seat: '', blind: '', player: '', reqTime: '', status: '', movedTime: '', remark: '' }));
+                    const initialTables = Array.from({ length: 12 }).map((_, i) => ({ id: `E05-NL${(i + 1).toString().padStart(2, '0')}`, blindPrefix: '', isOpen: i < 4, seats: Array(10).fill(null) }));
+                    const initialVis = {};
+                    BLINDS.forEach(b => initialVis[b.prefix] = (b.prefix !== 'D' && b.prefix !== 'G'));
+
+                    const initialState = { queues: [], history: [], pmlData: emptyPml, pmlHistory: [], tables: initialTables, blindVis: initialVis, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS, autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false, adminLock: { isLocked: false, lockedBy: '' }, lastModified: Date.now() };
+
+                    docRef.set(initialState);
+                }
+            }, (err) => {
+                console.error("Firebase Snapshot Error:", err);
+            });
+        } else {
             const localBackup = JSON.parse(localStorage.getItem('poker_cloud_backup'));
             if (localBackup && localBackup.lastModified > localLastModified.current) {
                 localLastModified.current = localBackup.lastModified;
@@ -1355,13 +1368,9 @@
                 setPenalties(localBackup.penalties || []);
                 if (localBackup.weeklyPresets) setWeeklyPresets(localBackup.weeklyPresets);
                 if (localBackup.autoBlindEnabled !== undefined) setAutoBlindEnabled(localBackup.autoBlindEnabled);
-                if (localBackup.adminLock !== undefined) setAdminLock(localBackup.adminLock);
+                if (localBackup.adminLock) setAdminLock(localBackup.adminLock);
             }
-          }
-        };
-
-        fetchCloudData(); 
-        const syncInterval = setInterval(fetchCloudData, 3000); 
+        }
 
         const checkNewDay = () => {
             const currentDate = new Date();
@@ -1425,7 +1434,7 @@
           clearInterval(timer);
           clearInterval(timerNow);
           clearInterval(timerNewDay);
-          clearInterval(syncInterval);
+          if (unsub) unsub();
         };
       }, []);
 
