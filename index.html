@@ -18,7 +18,7 @@
   <!-- SheetJS (xlsx) for Multiple Sheet Excel Exports -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-  <!-- FIREBASE COMPAT SDKs (Bypasses Babel require() errors) -->
+  <!-- FIREBASE COMPAT SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
@@ -71,7 +71,6 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // --- FIREBASE CONFIGURATION ---
     const FIREBASE_CONFIG = {
       apiKey: "AIzaSyChZ5MPGfz8YE3L0ypv0F38mOSWGzYB3JU",
       authDomain: "resort-poker-hub.firebaseapp.com",
@@ -82,7 +81,6 @@
       appId: "1:426708418079:web:9d002eab23dc355c009f2a"
     };
 
-    // --- Constants & Config ---
     const BLINDS = [
       { blind: '$5 | $10', buyIn: '$400 - $1,500', prefix: 'A' },
       { blind: '$10 | $20', buyIn: '$800 - $4,000', prefix: 'B' },
@@ -93,7 +91,8 @@
       { blind: '$100 | $200', buyIn: '$8,000 - No Limit', prefix: 'G' },
     ];
     const MAX_ROWS = 10;
-    const ADMIN_PASSWORD = 'Admin8888';
+    const ADMIN_PASSWORD = 'Admin8888!';
+    const MASTER_PASSWORD = 'Master8888!';
     const CALLING_TIME_LIMIT_MS = 10 * 60 * 1000; 
 
     const DEFAULT_BLIND_PRESETS = {
@@ -106,7 +105,6 @@
         6: { A: false, B: true, C: true, D: false, E: true, F: true, G: false }  
     };
 
-    // --- SVG Icons ---
     const Icons = {
       Clock: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
       Alert: () => <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>,
@@ -121,10 +119,12 @@
       Upload: () => <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>,
       Cloud: ({ className = "w-4 h-4 text-green-400" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>,
       Monitor: () => <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>,
-      Expand: () => <svg className="w-4 h-4 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+      Expand: () => <svg className="w-4 h-4 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>,
+      Edit: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>,
+      Trash: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>,
+      Plus: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
     };
 
-    // --- Gemini Vision API Integration ---
     const callGeminiVisionAPI = async (base64Data, mimeType, prompt, schema) => {
         const apiKey = ""; 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
@@ -164,7 +164,6 @@
         }
     };
 
-    // --- Sub-Components Definitions ---
     function CameraScanner({ title, type, onCapture, onClose }) {
       const videoRef = useRef(null);
       const [error, setError] = useState('');
@@ -483,7 +482,7 @@
       const [error, setError] = useState('');
 
       const handleLogin = () => {
-        if (pass === 'Master8888') { 
+        if (pass === MASTER_PASSWORD) { 
             onLogin(true); 
             return;
         }
@@ -729,7 +728,7 @@
 
     function PlayerMovementList({ data, tables, updateData, onBack, requestDelete, bulkDelete, onApplyPenalty, onCheckPenalty }) {
       const [filterBlind, setFilterBlind] = useState('All');
-      const tableOptions = Array.from({length: 12}, (_, i) => `E05-NL${(i+1).toString().padStart(2, '0')}`);
+      const tableOptions = tables.map(t => t.id);
       const seatOptions = ['Seat 1', 'Seat 2', 'Seat 3', 'Seat 4', 'Seat 5', 'Seat 6', 'Seat 7', 'Seat 8', 'Seat 9', 'Spare'];
       const blindOptions = ['5/10', '10/20', '15/30', '20/40', '25/50', '50/100', '100/200'];
       const statusOptions = ['Pending', 'Completed', 'Cancel'];
@@ -1220,7 +1219,109 @@
       );
     }
 
-    // --- Main App Component ---
+    function AdminTableModal({ tables, updateTables, setDialog, onClose }) {
+      const [newTableId, setNewTableId] = useState('');
+
+      const handleAddTable = () => {
+        const id = newTableId.trim().toUpperCase();
+        if (!id) return;
+        if (tables.length >= 21) return setDialog({ type: 'alert', title: 'Limit Reached', message: 'Maximum of 21 tables allowed.', onConfirm: () => setDialog(null) });
+        if (tables.find(t => t.id === id)) return setDialog({ type: 'alert', title: 'Duplicate Table', message: `Table ${id} already exists.`, onConfirm: () => setDialog(null) });
+        
+        const newTable = { id, blindPrefix: '', isOpen: false, seats: Array(10).fill(null) };
+        updateTables([...tables, newTable]);
+        setNewTableId('');
+      };
+
+      const handleRemoveTable = (tableId) => {
+        const table = tables.find(t => t.id === tableId);
+        if (table.seats.some(s => s !== null)) {
+          return setDialog({ type: 'alert', title: 'Table Occupied', message: 'You must clear all seated players before removing this table.', onConfirm: () => setDialog(null) });
+        }
+        
+        const isDefault = ['E05-NL01', 'E05-NL02', 'E05-NL03', 'E05-NL04'].includes(tableId);
+        if (isDefault) {
+             setDialog({
+                 type: 'confirm',
+                 title: 'Hide Default Table?',
+                 message: `Warning: ${tableId} is a default floor table. Deleting it will permanently remove it from the dashboard until a system wipe.\n\nProceed?`,
+                 confirmStyle: 'danger',
+                 onConfirm: () => {
+                     updateTables(tables.filter(t => t.id !== tableId));
+                     setDialog(null);
+                 },
+                 onCancel: () => setDialog(null)
+             });
+        } else {
+             updateTables(tables.filter(t => t.id !== tableId));
+        }
+      };
+
+      const toggleTableOpen = (tId) => {
+        const t = tables.find(x => x.id === tId);
+        if (t.isOpen && t.seats.some(s => s !== null)) return setDialog({ type: 'alert', title: 'Table Occupied', message: 'You must clear all seated players before closing this table.', onConfirm: () => setDialog(null) });
+        updateTables(tables.map(x => x.id === tId ? { ...x, isOpen: !x.isOpen } : x));
+      };
+
+      const startEditingTable = (tId) => {
+        setDialog({
+            type: 'prompt',
+            title: 'Rename Table',
+            message: `Enter a new name for table ${tId}:`,
+            input: tId,
+            confirmText: 'Rename',
+            onConfirm: () => {
+                const newId = document.getElementById('dialog-input').value.trim().toUpperCase();
+                if (!newId) return;
+                if (newId !== tId && tables.find(t => t.id === newId)) {
+                    setDialog({ type: 'alert', title: 'Duplicate', message: 'A table with that name already exists.', onConfirm: () => setDialog(null) });
+                    return;
+                }
+                const newTables = tables.map(t => t.id === tId ? { ...t, id: newId } : t);
+                updateTables(newTables);
+                setDialog(null);
+            },
+            onCancel: () => setDialog(null)
+        });
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1e293b] border border-[#475569] p-6 rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-600 pb-2 shrink-0">
+               <h3 className="text-lg font-bold text-white">Manage Tables ({tables.length}/21)</h3>
+               <button onClick={onClose} className="text-gray-400 hover:text-white"><Icons.Close /></button>
+            </div>
+            
+            <div className="flex gap-2 mb-4 shrink-0">
+              <input type="text" value={newTableId} onChange={e => setNewTableId(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && handleAddTable()} placeholder="New Table ID (e.g. VIP-1)" className="flex-1 bg-black border border-gray-600 rounded p-2 text-white focus:border-[#D8B673] outline-none text-sm" />
+              <button onClick={handleAddTable} disabled={tables.length >= 21 || !newTableId.trim()} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold px-3 rounded transition shadow flex items-center gap-1 text-sm"><Icons.Plus /> Add</button>
+            </div>
+
+            <div className="space-y-2 mb-6 overflow-y-auto pr-2 custom-scrollbar flex-1">
+              {tables.map(t => (
+                <div key={t.id} className="flex justify-between items-center bg-[#0f172a] p-2 rounded border border-[#334155]">
+                  <div className="flex items-center gap-2">
+                     <span className={`text-sm font-bold ${t.isOpen ? 'text-white' : 'text-gray-500'}`}>{t.id}</span>
+                     <button onClick={() => startEditingTable(t.id)} className="text-gray-500 hover:text-blue-400 transition" title="Rename Table"><Icons.Edit /></button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                     <button onClick={() => toggleTableOpen(t.id)} className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded transition-colors w-16 ${t.isOpen ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400 border border-gray-600'}`}>{t.isOpen ? 'OPEN' : 'CLOSED'}</button>
+                     <button onClick={() => handleRemoveTable(t.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-900/30 rounded transition" title="Delete Table"><Icons.Trash /></button>
+                  </div>
+                </div>
+              ))}
+              {tables.length === 0 ? <p className="text-center text-gray-500 text-sm py-4 italic">No tables created.</p> : null}
+            </div>
+
+            <div className="shrink-0">
+               <button onClick={onClose} className="w-full bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition shadow">Done</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     function App() {
       const [view, setView] = useState(() => {
         const params = new URLSearchParams(window.location.search);
@@ -1262,7 +1363,7 @@
       const [highlightedPhone, setHighlightedPhone] = useState(null);
       const [adminRegisterOpen, setAdminRegisterOpen] = useState(false);
       const [resetModalOpen, setResetModalOpen] = useState(false);
-      const [showNewDayReminder, setShowNewDayReminder] = useState(false);
+      const [showNewDayReminder, setShowNewDayReminder] = useState(null);
       
       const [autoBlindEnabled, setAutoBlindEnabled] = useState(true);
       const [weeklyPresets, setWeeklyPresets] = useState(DEFAULT_BLIND_PRESETS);
@@ -1351,7 +1452,7 @@
                     }
                 } else {
                     const emptyPml = Array.from({length: 30}, () => ({ table: '', seat: '', blind: '', player: '', reqTime: '', status: '', movedTime: '', remark: '' }));
-                    const initialTables = Array.from({ length: 12 }).map((_, i) => ({ id: `E05-NL${(i + 1).toString().padStart(2, '0')}`, blindPrefix: '', isOpen: i < 4, seats: Array(10).fill(null) }));
+                    const initialTables = Array.from({ length: 4 }).map((_, i) => ({ id: `E05-NL${(i + 1).toString().padStart(2, '0')}`, blindPrefix: '', isOpen: true, seats: Array(10).fill(null) }));
                     const initialVis = {};
                     BLINDS.forEach(b => initialVis[b.prefix] = (b.prefix !== 'D' && b.prefix !== 'G'));
 
@@ -1390,17 +1491,10 @@
             const savedDate = localStorage.getItem('poker_trading_date_cloud');
 
             if (savedDate !== dateString) {
-                setShowNewDayReminder(true);
-                localStorage.setItem('poker_trading_date_cloud', dateString);
-
-                const dayOfWeek = tradingDate.getDay();
-                if (fullStateRef.current.autoBlindEnabled) {
-                    const todayPreset = fullStateRef.current.weeklyPresets[dayOfWeek];
-                    let newVis = { ...fullStateRef.current.blindVis };
-                    BLINDS.forEach(b => {
-                        newVis[b.prefix] = todayPreset[b.prefix] !== false; 
-                    });
-                    updateCloudState({ blindVis: newVis });
+                if (!savedDate) {
+                    localStorage.setItem('poker_trading_date_cloud', dateString);
+                } else {
+                    setShowNewDayReminder({ dateString, dayOfWeek: tradingDate.getDay() });
                 }
             }
         };
@@ -1444,7 +1538,7 @@
           clearInterval(timerNewDay);
           if (unsub) unsub();
         };
-      }, []);
+      }, [view]);
 
       const visibleBlindsList = BLINDS.filter(b => blindVis[b.prefix] !== false);
 
@@ -1577,31 +1671,6 @@
         } else {
             if (onSuccess) onSuccess();
         }
-      };
-
-      const autoCompletePml = (playerData) => {
-          if (!playerData) return;
-          const playerStr = `${playerData.id} (${playerData.nickName})`;
-          
-          setPmlData(prev => {
-              let changed = false;
-              const newData = prev.map(row => {
-                  if (row.player === playerStr && row.status !== 'Completed' && row.status !== 'Cancel') {
-                      changed = true;
-                      return { 
-                          ...row, 
-                          status: 'Completed', 
-                          movedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) 
-                      };
-                  }
-                  return row;
-              });
-              if (changed) {
-                  localStorage.setItem('poker_pml_v6', JSON.stringify(newData));
-                  return newData;
-              }
-              return prev;
-          });
       };
 
       const triggerDownloads = (isSilent = false) => {
@@ -1912,6 +1981,8 @@
           updates.pmlHistory = [];
           updates.pmlData = Array.from({length: 30}, () => ({ table: '', seat: '', blind: '', player: '', reqTime: '', status: '', movedTime: '', remark: '' }));
           updates.penalties = [];
+          
+          updates.tables = Array.from({ length: 4 }).map((_, i) => ({ id: `E05-NL0${i + 1}`, blindPrefix: '', isOpen: true, seats: Array(10).fill(null) }));
         }
 
         updateCloudState(updates);
@@ -1946,7 +2017,21 @@
           newTables[sourceTableIdx].seats[sIdx] = null;
           const newBlind = BLINDS.find(b => b.prefix === targetBlindPrefix);
           const newPlayer = { ...player, status: 'Confirmed', blindObj: newBlind, seatedAt: null };
-          updateCloudState({ tables: newTables, queues: [...queues, newPlayer] });
+          
+          const updatesPayload = { tables: newTables, queues: [...queues, newPlayer] };
+          
+          const playerStr = `${player.id} (${player.nickName})`;
+          let changedPml = false;
+          const newPmlData = pmlData.map(row => {
+              if (row.player === playerStr && row.status !== 'Completed' && row.status !== 'Cancel') {
+                  changedPml = true;
+                  return { ...row, status: 'Completed', movedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) };
+              }
+              return row;
+          });
+          if (changedPml) updatesPayload.pmlData = newPmlData;
+
+          updateCloudState(updatesPayload);
           
         } else if (source === 'queue') {
           const draggedQId = e.dataTransfer.getData('qId');
@@ -1983,7 +2068,21 @@
           const newQueues = [...queues];
           const targetIdx = newQueues.findIndex(q => q.id === targetQId);
           newQueues.splice(targetIdx, 0, newPlayer);
-          updateCloudState({ tables: newTables, queues: newQueues });
+          
+          const updatesPayload = { tables: newTables, queues: newQueues };
+
+          const playerStr = `${player.id} (${player.nickName})`;
+          let changedPml = false;
+          const newPmlData = pmlData.map(row => {
+              if (row.player === playerStr && row.status !== 'Completed' && row.status !== 'Cancel') {
+                  changedPml = true;
+                  return { ...row, status: 'Completed', movedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) };
+              }
+              return row;
+          });
+          if (changedPml) updatesPayload.pmlData = newPmlData;
+
+          updateCloudState(updatesPayload);
 
         } else if (source === 'queue') {
           const draggedQId = e.dataTransfer.getData('qId');
@@ -2026,6 +2125,8 @@
           
           const newQueues = queues.filter(x => x.id !== qId);
 
+          const updatesPayload = { tables: newTables, queues: newQueues };
+
           const playerStr = `${q.id} (${q.nickName})`;
           let changedPml = false;
           const newPmlData = pmlData.map(row => {
@@ -2035,9 +2136,8 @@
               }
               return row;
           });
-
-          const updatesPayload = { tables: newTables, queues: newQueues };
           if (changedPml) updatesPayload.pmlData = newPmlData;
+
           updateCloudState(updatesPayload);
 
         } else if (source === 'seat') {
@@ -2060,6 +2160,8 @@
           newTables[sourceTableIdx].seats[sourceSIdx] = playerAtTarget;
           newTables[targetTableIdx].seats[targetSeatIdx] = playerToMove;
           
+          const updatesPayload = { tables: newTables };
+
           const playerStr = `${playerToMove.id} (${playerToMove.nickName})`;
           let changedPml = false;
           const newPmlData = pmlData.map(row => {
@@ -2069,9 +2171,8 @@
               }
               return row;
           });
-
-          const updatesPayload = { tables: newTables };
           if (changedPml) updatesPayload.pmlData = newPmlData;
+
           updateCloudState(updatesPayload);
         }
       };
@@ -2481,15 +2582,46 @@
             </footer>
           ) : null}
 
+          {}
           {showNewDayReminder && view === 'admin-dash' ? (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-              <div className="bg-[#1e293b] border border-[#D8B673] p-6 rounded-xl shadow-2xl max-w-md w-full text-center">
-                <Icons.Alert className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-[#D8B673] mb-2 uppercase tracking-wider">New Trading Day Started</h3>
-                <p className="text-gray-300 text-sm mb-6 leading-relaxed">Trading dates automatically reset at 04:00 AM.<br/><br/><span className="text-white font-bold bg-red-900/40 px-3 py-1 rounded">Supervisor Reminder:</span><br/>Please download the daily backup file and clear all data to start fresh for the new day.</p>
-                <div className="flex flex-col gap-3">
-                  <button onClick={() => { triggerDownloads(false); setShowNewDayReminder(false); setResetModalOpen(true); }} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2"><Icons.Download /> 1. Backup & Go to Reset</button>
-                  <button onClick={() => setShowNewDayReminder(false)} className="w-full border border-gray-600 hover:bg-gray-800 text-gray-400 font-bold py-2 rounded-lg transition">Dismiss Warning</button>
+              <div className="bg-[#1e293b] border border-red-500 p-6 rounded-xl shadow-2xl max-w-md w-full text-center">
+                <Icons.Alert className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-red-400 mb-2 uppercase tracking-wider">MANDATORY EOD ROLLOVER</h3>
+                <p className="text-gray-300 text-sm mb-6 leading-relaxed">
+                   The system has detected a new trading day (past 04:00 AM).<br/><br/>
+                   <span className="text-white font-bold bg-red-900/40 px-3 py-1 rounded border border-red-700 block mt-2">
+                       Active tables and queues might still be running!
+                   </span><br/>
+                   Please ensure you have performed your final daily backup before authorizing this reset.
+                </p>
+                <div className="flex flex-col gap-3 mb-6">
+                   <button onClick={() => triggerDownloads(false)} className="w-full bg-blue-700 hover:bg-blue-600 text-white font-bold py-2.5 rounded transition shadow flex items-center justify-center gap-2">
+                      <Icons.Download /> Run Final Backup Now
+                   </button>
+                </div>
+                <div className="border-t border-gray-700 pt-4 text-left">
+                   <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-1 block">Supervisor Authorization</label>
+                   <input type="password" id="eod-auth-input" className="w-full bg-black border border-gray-600 rounded p-2.5 text-white focus:border-red-500 outline-none mb-3" placeholder="Enter Admin Password" />
+                   <button onClick={() => {
+                        const pass = document.getElementById('eod-auth-input').value;
+                        if (pass === ADMIN_PASSWORD || pass === MASTER_PASSWORD) {
+                             const ds = showNewDayReminder.dateString;
+                             const dow = showNewDayReminder.dayOfWeek;
+                             localStorage.setItem('poker_trading_date_cloud', ds);
+                             if (fullStateRef.current.autoBlindEnabled) {
+                                 const todayPreset = fullStateRef.current.weeklyPresets[dow];
+                                 let newVis = { ...fullStateRef.current.blindVis };
+                                 BLINDS.forEach(b => { newVis[b.prefix] = todayPreset[b.prefix] !== false; });
+                                 updateCloudState({ blindVis: newVis });
+                             }
+                             setShowNewDayReminder(false);
+                        } else {
+                             setDialog({ type: 'alert', title: 'Error', message: 'Invalid Supervisor Password. Rollover blocked.', onConfirm: () => setDialog(null) });
+                        }
+                   }} className="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-3 rounded transition shadow-lg">
+                      AUTHORIZE ROLLOVER
+                   </button>
                 </div>
               </div>
             </div>
@@ -2524,22 +2656,7 @@
             </div>
           ) : null}
 
-          {tableModalOpen ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-              <div className="bg-[#1e293b] border border-[#475569] p-6 rounded-xl shadow-2xl max-w-sm w-full">
-                <h3 className="text-lg font-bold text-white mb-4 border-b border-gray-600 pb-2">Table Open/Close Management</h3>
-                <div className="space-y-3 mb-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-                  {tables.map(t => (
-                    <div key={t.id} className="flex justify-between items-center bg-[#0f172a] p-2 rounded border border-[#334155]">
-                      <span className={`text-sm font-bold ${t.isOpen ? 'text-white' : 'text-gray-500'}`}>{t.id}</span>
-                      <button onClick={() => toggleTableOpen(t.id)} className={`text-xs font-bold px-4 py-1.5 rounded transition-colors ${t.isOpen ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400 border border-gray-600'}`}>{t.isOpen ? 'OPEN' : 'CLOSED'}</button>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2"><button onClick={() => setTableModalOpen(false)} className="w-full bg-[#d8b46e] text-black font-bold py-2.5 rounded transition">Done</button></div>
-              </div>
-            </div>
-          ) : null}
+          {tableModalOpen ? <AdminTableModal tables={tables} updateTables={(t) => updateCloudState({ tables: t })} setDialog={setDialog} onClose={() => setTableModalOpen(false)} /> : null}
 
           {dialog ? (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
