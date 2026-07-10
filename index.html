@@ -22,6 +22,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
+  <!-- Tesseract.js for Client-Side OCR Scanning -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
   <style>
     body {
       background-color: black;
@@ -125,45 +128,6 @@
       Plus: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
     };
 
-    const callGeminiVisionAPI = async (base64Data, mimeType, prompt, schema) => {
-        const apiKey = ""; 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-        const payload = {
-            contents: [{
-                role: "user",
-                parts: [
-                    { text: prompt },
-                    { inlineData: { mimeType: mimeType, data: base64Data } }
-                ]
-            }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: schema
-            }
-        };
-
-        const delay = (ms) => new Promise(res => setTimeout(res, ms));
-        const backoffs = [1000, 2000, 4000, 8000, 16000];
-
-        for (let i = 0; i <= backoffs.length; i++) {
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                const data = await response.json();
-                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (!text) throw new Error("No text returned from Gemini API");
-                return JSON.parse(text);
-            } catch (error) {
-                if (i === backoffs.length) throw error;
-                await delay(backoffs[i]);
-            }
-        }
-    };
-
     function CameraScanner({ title, type, onCapture, onClose }) {
       const videoRef = useRef(null);
       const [error, setError] = useState('');
@@ -190,7 +154,8 @@
           canvas.height = videoRef.current.videoHeight;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          onCapture(canvas.toDataURL('image/jpeg').split(',')[1], 'image/jpeg');
+          // Return full data URL for Tesseract
+          onCapture(canvas.toDataURL('image/jpeg'));
         }
       };
 
@@ -240,69 +205,71 @@
         });
       };
 
-      const processCapturedImage = async (base64Data, mimeType, type) => {
+      const processCapturedImage = async (dataUrl, type) => {
         setActiveCamera(null);
         setIsProcessing(true);
 
         try {
+            // Using Tesseract.js (Offline Client-Side OCR, No API Key needed)
+            const result = await Tesseract.recognize(dataUrl, 'eng');
+            let text = result.data.text;
+            
             if (type === 'ticket') {
-                const prompt = `Extract the queue numbers and the last 4 digits of the phone number from this ticket. The phone number usually looks like 'XXXXXXX1234'. Return ONLY a valid JSON object. Example: {"queues": ["A0050", "B0043"], "phoneLast4": "4263"}`;
-                const schema = {
-                    type: "OBJECT",
-                    properties: {
-                        queues: { type: "ARRAY", items: { type: "STRING" } },
-                        phoneLast4: { type: "STRING" }
-                    }
-                };
-                
-                const result = await callGeminiVisionAPI(base64Data, mimeType, prompt, schema);
+                // 1. Clean the text to fix common OCR errors first
+                const cleanText = (t) => t.replace(/\s+/g, '').toUpperCase().replace(/[O]/g, '0').replace(/[S]/g, '5').replace(/[LI]/g, '1');
+                text = cleanText(text);
 
-                if (result && result.queues && result.queues.length > 0) {
-                    const newEntries = [];
-                    result.queues.slice(0, 3).forEach((qNum) => {
-                        const prefix = qNum.charAt(0).toUpperCase();
+                // 2. Extract Phone Number First
+                // Look for a sequence of 'X's followed by 4 digits.
+                const phoneRegex = /[X*]{3,}[^0-9\n]*([0-9]{4})/;
+                const phoneMatch = text.match(phoneRegex);
+                let parsedPhone = '';
+                
+                if (phoneMatch) {
+                    parsedPhone = phoneMatch[1];
+                    setPhone(parsedPhone);
+                    // Remove the phone number string from the text so it doesn't get confused as a queue
+                    text = text.replace(phoneMatch[0], ''); 
+                }
+
+                // 3. Extract Queue Numbers
+                // Look for A-G followed exactly by 4 digits
+                const queueRegex = /([A-G][0-9]{4})/g;
+                const queueMatches = text.match(queueRegex) || [];
+                
+                // Deduplicate matched queues
+                const parsedQueues = [...new Set(queueMatches)].slice(0, 3);
+
+                if (parsedQueues.length > 0) {
+                    const newEntries = parsedQueues.map(qNum => {
+                        const prefix = qNum.charAt(0);
                         const bIdx = visibleBlinds.findIndex(b => b.prefix === prefix);
-                        const mName = entries[0]?.memberName || '';
-                        const mId = entries[0]?.memberId || '';
-                        const nName = entries[0]?.nickName || '';
-                        
-                        newEntries.push({
-                           qNum: qNum.toUpperCase(),
-                           nickName: nName,
-                           memberName: mName,
-                           memberId: mId,
+                        return {
+                           qNum,
+                           nickName: '', // Let it default to queue automatically on submit
+                           memberName: entries[0]?.memberName || '',
+                           memberId: entries[0]?.memberId || '',
                            blindIdx: bIdx !== -1 ? bIdx : 0
-                        });
+                        };
                     });
                     setEntries(newEntries);
                 }
-                if (result && result.phoneLast4) {
-                    setPhone(result.phoneLast4);
+
+                if (parsedQueues.length === 0 && !parsedPhone) {
+                    dialogFn({ type: 'alert', title: 'Scan Failed', message: 'Could not detect valid queue numbers or phone details from the ticket. Please try again.', onConfirm: () => dialogFn(null) });
                 }
             } else if (type === 'card') {
-                const prompt = `Extract the Member Name and 11-digit Member ID from this membership card. Return ONLY a valid JSON object. Example: {"memberName": "JOHN DOE", "memberId": "81860003456"}`;
-                const schema = {
-                    type: "OBJECT",
-                    properties: {
-                        memberName: { type: "STRING" },
-                        memberId: { type: "STRING" }
-                    }
-                };
-                
-                const result = await callGeminiVisionAPI(base64Data, mimeType, prompt, schema);
-
-                if (result && (result.memberName || result.memberId)) {
-                    const firstName = result.memberName ? result.memberName.split(' ')[0] : '';
-                    setEntries(prev => prev.map(entry => ({
-                        ...entry,
-                        memberName: result.memberName || entry.memberName,
-                        memberId: result.memberId || entry.memberId,
-                        nickName: entry.nickName || firstName 
-                    })));
+                // Member card scanning logic finding 11 digits
+                const idMatch = text.match(/\b\d{11}\b/);
+                if (idMatch) {
+                    setEntries(prev => prev.map(e => ({ ...e, memberId: idMatch[0] })));
+                } else {
+                    dialogFn({ type: 'alert', title: 'Scan Failed', message: 'Could not automatically read the 11-digit member ID. Please try again.', onConfirm: () => dialogFn(null) });
                 }
             }
         } catch (error) {
-            dialogFn({ type: 'alert', title: 'Scan Failed', message: 'Could not automatically read the information. Please adjust lighting and try again, or type it manually.', onConfirm: () => dialogFn(null) });
+            console.error("OCR Error:", error);
+            dialogFn({ type: 'alert', title: 'Scan Failed', message: 'An error occurred during text recognition. Please check your camera permissions and try again.', onConfirm: () => dialogFn(null) });
         } finally {
             setIsProcessing(false);
         }
@@ -330,7 +297,7 @@
       };
 
       const isValidEntry = (e) => {
-        if (!e.qNum.trim() || !e.nickName.trim()) return false;
+        if (!e.qNum.trim()) return false;
         if (requireMemberInfo && (!e.memberName.trim() || !e.memberId.trim())) return false;
         return true;
       };
@@ -340,7 +307,7 @@
         if (validEntries.length > 0 && phone.length >= 4) {
           const mapped = validEntries.map(e => ({ 
               qNum: e.qNum, 
-              nickName: e.nickName, 
+              nickName: e.nickName.trim() || e.qNum.trim(), // Defaults to Queue Number if left blank
               memberName: e.memberName,
               memberId: e.memberId,
               blindObj: visibleBlinds[e.blindIdx] 
@@ -361,7 +328,7 @@
                 title={activeCamera === 'ticket' ? "Scan Queue Ticket" : "Scan Member Card"}
                 type={activeCamera}
                 onClose={() => setActiveCamera(null)}
-                onCapture={(base64, mimeType) => processCapturedImage(base64, mimeType, activeCamera)}
+                onCapture={(dataUrl) => processCapturedImage(dataUrl, activeCamera)}
              />
           ) : null}
 
@@ -369,7 +336,7 @@
              <div className="absolute inset-0 bg-black/80 z-[60] flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
                 <div className="ai-spinner mb-4"></div>
                 <p className="text-[#D8B673] font-bold tracking-widest text-sm uppercase text-center px-4">
-                    Analyzing Image...
+                    Analyzing Text...<br/><span className="text-[10px] text-gray-400 normal-case">(May take a moment)</span>
                 </p>
              </div>
           ) : null}
@@ -377,16 +344,16 @@
           <h2 className="text-xl sm:text-2xl font-bold mb-2 text-center text-[#D8B673]">Resort Poker Hub - Registration</h2>
           <p className="text-xs sm:text-sm text-gray-400 text-center mb-6">Enter up to 3 queues from your ticket(s).</p>
           
-          {requireMemberInfo ? (
-            <div className="flex gap-2 mb-6">
-              <button 
-                onClick={() => setActiveCamera('ticket')} 
-                className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg"
-              >
-                  <Icons.Camera />
-                  <span className="text-[10px] sm:text-xs font-bold">Scan Queue Ticket</span>
-              </button>
+          <div className={`flex gap-2 mb-6 ${requireMemberInfo ? '' : 'justify-center'}`}>
+            <button 
+              onClick={() => setActiveCamera('ticket')} 
+              className={`flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg ${requireMemberInfo ? '' : 'max-w-[200px]'}`}
+            >
+                <Icons.Camera />
+                <span className="text-[10px] sm:text-xs font-bold">Scan Queue Ticket</span>
+            </button>
 
+            {requireMemberInfo ? (
               <button 
                 onClick={() => setActiveCamera('card')} 
                 className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg"
@@ -394,8 +361,8 @@
                   <Icons.Camera />
                   <span className="text-[10px] sm:text-xs font-bold">Scan Member Card</span>
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
 
           <div className="space-y-4">
             {entries.map((entry, index) => (
@@ -420,7 +387,7 @@
 
                 <div className="mb-3">
                   <label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">Nick Name</label>
-                  <input type="text" value={entry.nickName} onChange={(e) => updateEntry(index, 'nickName', e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-[#D8B673] font-bold tracking-wider" placeholder="e.g. John" />
+                  <input type="text" value={entry.nickName} onChange={(e) => updateEntry(index, 'nickName', e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-[#D8B673] font-bold tracking-wider" placeholder="Optional (Defaults to Queue)" />
                 </div>
 
                 {requireMemberInfo ? (
@@ -444,7 +411,7 @@
             ) : null}
 
             <div className="pt-2">
-              <label className="block text-xs sm:text-sm text-gray-300 mb-1 font-medium">Phone Number Last 4 Digits (Password)</label>
+              <label className="block text-xs sm:text-sm text-gray-300 mb-1 font-medium">Membership / Mobile Number Last 4 Digits (Password)</label>
               <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} className="w-full bg-black border border-gray-700 rounded-lg p-2.5 text-white text-base focus:outline-none focus:border-[#D8B673] tracking-wider" placeholder="e.g. 4263" />
             </div>
             
@@ -726,218 +693,6 @@
       );
     }
 
-    function PlayerMovementList({ data, tables, updateData, onBack, requestDelete, bulkDelete, onApplyPenalty, onCheckPenalty }) {
-      const [filterBlind, setFilterBlind] = useState('All');
-      const tableOptions = tables.map(t => t.id);
-      const seatOptions = ['Seat 1', 'Seat 2', 'Seat 3', 'Seat 4', 'Seat 5', 'Seat 6', 'Seat 7', 'Seat 8', 'Seat 9', 'Spare'];
-      const blindOptions = ['5/10', '10/20', '15/30', '20/40', '25/50', '50/100', '100/200'];
-      const statusOptions = ['Pending', 'Completed', 'Cancel'];
-
-      const pendingCount = data.filter(d => d.status === 'Pending').length;
-      const completedCount = data.filter(d => d.status === 'Completed').length;
-      const cancelCount = data.filter(d => d.status === 'Cancel').length;
-
-      const handleChange = (index, field, value) => {
-        const newData = [...data];
-        const row = { ...newData[index] };
-        
-        row[field] = value;
-
-        if (field === 'table') {
-           row.seat = '';
-           row.player = '';
-           if (value !== '') {
-               const selectedTable = tables.find(t => t.id === value);
-               if (selectedTable && selectedTable.blindPrefix) {
-                   const blindMatch = BLINDS.find(b => b.prefix === selectedTable.blindPrefix);
-                   if (blindMatch) {
-                       row.blind = blindMatch.blind.replace(/\$/g, '').replace(/ /g, '').replace('|', '/');
-                       if (!row.reqTime) row.reqTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                   }
-               }
-           }
-        }
-
-        if (field === 'seat' && row.table && value !== '') {
-           const selectedTable = tables.find(t => t.id === row.table);
-           if (selectedTable) {
-              let seatIndex = -1;
-              if (value.startsWith('Seat ')) seatIndex = parseInt(value.replace('Seat ', '')) - 1;
-              else if (value === 'Spare') seatIndex = 9;
-              
-              if (seatIndex >= 0 && seatIndex < 10) {
-                 const playerAtSeat = selectedTable.seats[seatIndex];
-                 if (playerAtSeat) {
-                    const playerStr = `${playerAtSeat.id} (${playerAtSeat.nickName})`;
-                    row.player = playerStr;
-                    if (!row.blind && selectedTable.blindPrefix) {
-                        const blindMatch = BLINDS.find(b => b.prefix === selectedTable.blindPrefix);
-                        if (blindMatch) row.blind = blindMatch.blind.replace(/\$/g, '').replace(/ /g, '').replace('|', '/');
-                    }
-                    if (!row.reqTime) row.reqTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                    
-                    if (onCheckPenalty) {
-                        onCheckPenalty(playerStr, null, () => {
-                            setTimeout(() => {
-                                const revertedData = [...data];
-                                revertedData[index].player = '';
-                                revertedData[index].seat = '';
-                                updateData(revertedData);
-                            }, 50);
-                        });
-                    }
-                 } else row.player = '';
-              }
-           }
-        }
-
-        if (field === 'blind' && value !== '' && !row.reqTime) row.reqTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-        if (field === 'status' && value !== '') row.movedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-
-        newData[index] = row;
-        updateData(newData);
-      };
-
-      const handleClearCompleted = () => {
-          const completedIndices = [];
-          const completedRows = [];
-          data.forEach((row, idx) => {
-              if (row.status === 'Completed' || row.status === 'Cancel') {
-                  completedIndices.push(idx);
-                  completedRows.push(row);
-              }
-          });
-          if (completedIndices.length > 0) bulkDelete(completedIndices, completedRows);
-      };
-
-      return (
-        <div className="bg-gray-50 text-black rounded-lg shadow-2xl h-full flex flex-col w-full overflow-hidden border border-gray-300">
-          <div className="flex flex-col sm:flex-row justify-between items-center p-4 sm:p-6 pb-2 sm:pb-4 gap-4 bg-white border-b border-gray-200 shrink-0">
-            <div className="flex flex-col items-center sm:items-start">
-               <h2 className="text-xl sm:text-2xl font-black tracking-wider text-gray-800 uppercase mb-2">Movement List (Seat/Table Transfer)</h2>
-               <div className="flex gap-2">
-                 <span className="bg-yellow-100 text-yellow-800 border border-yellow-200 px-2 py-0.5 rounded text-xs font-bold">Pending: {pendingCount}</span>
-                 <span className="bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded text-xs font-bold">Completed: {completedCount}</span>
-                 <span className="bg-red-100 text-red-800 border border-red-200 px-2 py-0.5 rounded text-xs font-bold">Canceled: {cancelCount}</span>
-               </div>
-            </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button onClick={handleClearCompleted} className="flex-1 sm:flex-none bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-500 transition text-sm shadow flex items-center justify-center gap-1">
-                <Icons.CheckDouble /> Clear Finished
-              </button>
-              <button onClick={onBack} className="flex-1 sm:flex-none bg-gray-800 text-white px-4 py-2 rounded font-bold hover:bg-gray-700 transition text-sm shadow">
-                Back to Dashboard
-              </button>
-            </div>
-          </div>
-          
-          <div className="flex-1 overflow-auto w-full custom-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[750px] lg:min-w-[1000px] relative">
-              <thead>
-                <tr className="bg-[#1e293b] text-white shadow-[0_2px_4px_rgba(0,0,0,0.1)]">
-                  <th className="sticky left-0 z-20 border-b border-[#334155] p-2 w-8 sm:w-10 text-center bg-[#1e293b] shadow-[2px_0_4px_rgba(0,0,0,0.2)]">#</th>
-                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Table</th>
-                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-20 sm:w-24">Seat</th>
-                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-28">
-                     <div className="flex flex-col items-start">
-                       <span>Blinds</span>
-                       <select className="mt-1 text-black bg-gray-200 text-[10px] sm:text-xs px-1 py-0.5 rounded w-full outline-none" value={filterBlind} onChange={e => setFilterBlind(e.target.value)}>
-                          <option value="All">All Blinds</option>
-                          {blindOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                       </select>
-                     </div>
-                  </th>
-                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2">Player Name / Queue</th>
-                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Req Time</th>
-                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Status</th>
-                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Moved Time</th>
-                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 min-w-[200px]">Transfer To / Remark</th>
-                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-16 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((row, originalIndex) => ({ row, originalIndex }))
-                     .filter(item => {
-                         if (filterBlind === 'All') return true;
-                         const isEmpty = !item.row.table && !item.row.blind && !item.row.player && !item.row.status;
-                         return item.row.blind === filterBlind || isEmpty;
-                     })
-                     .map((item) => {
-                  const { row, originalIndex } = item;
-                  
-                  let rowClass = "transition-colors border-b border-gray-300 min-h-[48px] ";
-                  let leftStickyColor = "bg-white"; 
-                  if (!row.table && !row.player && !row.status) { rowClass += "bg-white hover:bg-gray-50 opacity-60"; leftStickyColor = "bg-white"; } 
-                  else if (row.status === 'Completed') { rowClass += "bg-green-50 hover:bg-green-100"; leftStickyColor = "bg-green-50"; } 
-                  else if (row.status === 'Cancel') { rowClass += "bg-red-50 hover:bg-red-100"; leftStickyColor = "bg-red-50"; } 
-                  else if (row.status === 'Pending') { rowClass += "bg-yellow-50 hover:bg-yellow-100"; leftStickyColor = "bg-yellow-50"; } 
-                  else { rowClass += "bg-white hover:bg-gray-50"; }
-
-                  let statusColorClass = "w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 rounded font-bold text-xs sm:text-sm ";
-                  if (row.status === 'Pending') statusColorClass += "text-yellow-600";
-                  else if (row.status === 'Completed') statusColorClass += "text-green-600";
-                  else if (row.status === 'Cancel') statusColorClass += "text-red-600";
-                  else statusColorClass += "text-black";
-
-                  return (
-                    <tr key={originalIndex} className={rowClass}>
-                      <td className={`sticky left-0 z-10 p-1 text-center font-bold text-gray-500 ${leftStickyColor} shadow-[2px_0_4px_rgba(0,0,0,0.05)]`}>{originalIndex + 1}</td>
-                      <td className="p-1">
-                         <select value={row.table} onChange={e => handleChange(originalIndex, 'table', e.target.value)} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300">
-                           <option value=""></option>
-                           {tableOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                         </select>
-                      </td>
-                      <td className="p-1">
-                         <select value={row.seat || ''} onChange={e => handleChange(originalIndex, 'seat', e.target.value)} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300">
-                           <option value=""></option>
-                           {seatOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                         </select>
-                      </td>
-                      <td className="p-1">
-                         <select value={row.blind} onChange={e => handleChange(originalIndex, 'blind', e.target.value)} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300">
-                           <option value=""></option>
-                           {blindOptions.map(b => <option key={b} value={b}>{b}</option>)}
-                         </select>
-                      </td>
-                      <td className="p-1">
-                         <input type="text" value={row.player} onChange={e => handleChange(originalIndex, 'player', e.target.value)} onBlur={e => { if (e.target.value && onCheckPenalty) onCheckPenalty(e.target.value, null, () => handleChange(originalIndex, 'player', '')); }} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300 font-medium" />
-                      </td>
-                      <td className="p-1">
-                         <input type="text" value={row.reqTime} onChange={e => handleChange(originalIndex, 'reqTime', e.target.value)} className="w-full h-full p-1.5 sm:p-2 text-center bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-300 text-xs sm:text-sm rounded border border-transparent hover:border-gray-300" placeholder="--:--" />
-                      </td>
-                      <td className="p-1">
-                         <select value={row.status} onChange={e => handleChange(originalIndex, 'status', e.target.value)} className={statusColorClass + " border border-transparent hover:border-gray-300"}>
-                           <option value=""></option>
-                           {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                         </select>
-                      </td>
-                      <td className="p-1">
-                         <input type="text" value={row.movedTime} onChange={e => handleChange(originalIndex, 'movedTime', e.target.value)} className="w-full h-full p-1.5 sm:p-2 text-center bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-300 text-xs sm:text-sm rounded border border-transparent hover:border-gray-300" placeholder="--:--" />
-                      </td>
-                      <td className="p-1">
-                         <div className="flex flex-col gap-0.5 w-full h-full bg-transparent rounded focus-within:ring-2 focus-within:ring-blue-500 border border-transparent hover:border-gray-300">
-                             <select className="w-full bg-gray-200 text-gray-700 text-[10px] sm:text-xs rounded outline-none cursor-pointer" value="" onChange={e => { if (e.target.value !== '') { if (e.target.value === '1hr' || e.target.value === '2hr') onApplyPenalty(originalIndex, row, e.target.value === '1hr' ? 1 : 2); e.target.value = ''; } }}>
-                                 <option value="">Quick Remark...</option>
-                                 <option value="1hr">Cancel 1 hr cannot queue</option>
-                                 <option value="2hr">Cancel 2 hrs cannot queue</option>
-                             </select>
-                             <input type="text" value={row.remark} onChange={e => handleChange(originalIndex, 'remark', e.target.value)} className="w-full bg-transparent outline-none text-black text-xs sm:text-sm font-medium mt-0.5 px-1" placeholder="Type remark..." />
-                         </div>
-                      </td>
-                      <td className="p-1 text-center">
-                         {(row.player || row.table || row.blind || row.status) ? <button onClick={() => requestDelete(originalIndex, row)} className="bg-red-600 text-white px-2 py-1 m-1 text-[10px] sm:text-xs rounded hover:bg-red-500 font-bold transition">Clear</button> : null}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      );
-    }
-
     function QueueBoard({ queues, visibleBlinds, isWallDisplay = false }) {
       const activeQueues = queues.filter(q => ['Confirmed', 'Next', 'Calling', "Time's Up", 'Arrived'].includes(q.status));
 
@@ -1096,15 +851,71 @@
       );
     }
 
-    function AdminFastRegisterModal({ visibleBlinds, onClose, onRegister }) {
+    function AdminFastRegisterModal({ visibleBlinds, onClose, onRegister, setDialog }) {
       const [entries, setEntries] = useState([{ qNum: '', blindIdx: 0 }]);
       const [nickName, setNickName] = useState('');
       const [phone, setPhone] = useState('');
+      
+      const [activeCamera, setActiveCamera] = useState(false);
+      const [isProcessing, setIsProcessing] = useState(false);
+
+      const processCapturedImage = async (dataUrl) => {
+          setActiveCamera(false);
+          setIsProcessing(true);
+          try {
+              // Tesseract OCR (Client-side, No APIs)
+              const result = await Tesseract.recognize(dataUrl, 'eng');
+              let text = result.data.text;
+              
+              // 1. Clean the text to fix common OCR errors first
+              const cleanText = (t) => t.replace(/\s+/g, '').toUpperCase().replace(/[O]/g, '0').replace(/[S]/g, '5').replace(/[LI]/g, '1');
+              text = cleanText(text);
+
+              // 2. Extract Phone Number First
+              const phoneRegex = /[X*]{3,}[^0-9\n]*([0-9]{4})/;
+              const phoneMatch = text.match(phoneRegex);
+              let phoneLast4 = '';
+              
+              if (phoneMatch) {
+                  phoneLast4 = phoneMatch[1];
+                  setPhone(phoneLast4);
+                  // Remove the phone number string from the text so it doesn't get confused as a queue
+                  text = text.replace(phoneMatch[0], ''); 
+              }
+
+              // 3. Extract Queue Numbers
+              const queueRegex = /([A-G][0-9]{4})/g;
+              const queueMatches = text.match(queueRegex) || [];
+              const scannedQueues = [...new Set(queueMatches)].slice(0, 3);
+
+              if (scannedQueues.length > 0) {
+                  const newEntries = scannedQueues.map(qNum => {
+                      const prefix = qNum.charAt(0);
+                      const bIdx = visibleBlinds.findIndex(b => b.prefix === prefix);
+                      return { qNum, blindIdx: bIdx !== -1 ? bIdx : 0 };
+                  });
+                  setEntries(newEntries);
+              }
+
+              if (scannedQueues.length === 0 && !phoneLast4) {
+                   setDialog({ type: 'alert', title: 'Scan Failed', message: 'Could not detect valid queue numbers or phone details from the ticket. Please try entering them manually.', onConfirm: () => setDialog(null) });
+              }
+          } catch (error) {
+              console.error("OCR Error:", error);
+              setDialog({ type: 'alert', title: 'Scan Error', message: 'An error occurred during text recognition. Please try again.', onConfirm: () => setDialog(null) });
+          } finally {
+              setIsProcessing(false);
+          }
+      };
 
       const handleRegister = () => {
         const validEntries = entries.filter(e => e.qNum.trim() !== '');
-        if (validEntries.length === 0 || !nickName.trim() || phone.length < 4) return;
-        const mappedEntries = validEntries.map(e => ({ qNum: e.qNum, nickName: nickName, blindObj: visibleBlinds[e.blindIdx] }));
+        if (validEntries.length === 0 || phone.length < 4) return;
+        const mappedEntries = validEntries.map(e => ({ 
+            qNum: e.qNum, 
+            nickName: nickName.trim() || e.qNum.trim(), // Default to Queue number
+            blindObj: visibleBlinds[e.blindIdx] 
+        }));
         onRegister(mappedEntries, phone);
       };
 
@@ -1120,21 +931,40 @@
         setEntries(newEntries);
       };
 
-      const updateEntry = (index, field, value) => {
-        const newEntries = [...entries];
-        newEntries[index][field] = value;
-        setEntries(newEntries);
-      };
-
       const addEntry = () => { if (entries.length < 3) setEntries([...entries, { qNum: '', blindIdx: 0 }]); };
       const removeEntry = (index) => setEntries(entries.filter((_, i) => i !== index));
-      const isFormValid = entries.some(e => e.qNum.trim() !== '') && nickName.trim() !== '' && phone.length >= 4;
+      // Nickname is completely optional for validation
+      const isFormValid = entries.some(e => e.qNum.trim() !== '') && phone.length >= 4;
 
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-[#1e293b] border border-[#475569] p-5 sm:p-6 rounded-xl shadow-2xl max-w-sm w-full flex flex-col max-h-[90vh]">
+            
+            {activeCamera ? (
+               <CameraScanner 
+                  title="Scan Queue Ticket"
+                  type="ticket"
+                  onClose={() => setActiveCamera(false)}
+                  onCapture={processCapturedImage}
+               />
+            ) : null}
+
+            {isProcessing ? (
+               <div className="absolute inset-0 bg-black/80 z-[60] flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
+                  <div className="ai-spinner mb-4"></div>
+                  <p className="text-[#D8B673] font-bold tracking-widest text-sm uppercase text-center px-4">
+                      Analyzing Text...<br/><span className="text-[10px] text-gray-400 normal-case">(May take a moment)</span>
+                  </p>
+               </div>
+            ) : null}
+
             <h3 className="text-lg font-bold text-white mb-4 border-b border-gray-600 pb-2 text-[#D8B673] shrink-0">⚡ Admin Fast Registration</h3>
             <div className="overflow-y-auto custom-scrollbar pr-1 mb-4 space-y-4">
+              
+              <button onClick={() => setActiveCamera(true)} className="w-full bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2 font-bold text-sm">
+                  <Icons.Camera /> Scan Queue Ticket
+              </button>
+
               <div className="space-y-4">
                   {entries.map((entry, index) => (
                     <div key={index} className="p-3 bg-black/40 border border-gray-700 rounded-lg relative space-y-3">
@@ -1156,10 +986,10 @@
               <div className="pt-2 border-t border-gray-700 space-y-3">
                 <div>
                   <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Nick Name (Applies to all)</label>
-                  <input type="text" value={nickName} onChange={e => setNickName(e.target.value)} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none" placeholder="e.g. John" />
+                  <input type="text" value={nickName} onChange={e => setNickName(e.target.value)} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none" placeholder="Optional (Defaults to Queue)" />
                 </div>
                 <div>
-                  <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Phone (Last 4 Digits)</label>
+                  <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Membership / Mobile Number (Last 4 Digits)</label>
                   <input type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none" placeholder="e.g. 4263" />
                 </div>
               </div>
@@ -1322,6 +1152,218 @@
       );
     }
 
+    function PlayerMovementList({ data, tables, updateData, onBack, requestDelete, bulkDelete, onApplyPenalty, onCheckPenalty }) {
+      const [filterBlind, setFilterBlind] = useState('All');
+      const tableOptions = tables.map(t => t.id);
+      const seatOptions = ['Seat 1', 'Seat 2', 'Seat 3', 'Seat 4', 'Seat 5', 'Seat 6', 'Seat 7', 'Seat 8', 'Seat 9', 'Spare'];
+      const blindOptions = ['5/10', '10/20', '15/30', '20/40', '25/50', '50/100', '100/200'];
+      const statusOptions = ['Pending', 'Completed', 'Cancel'];
+
+      const pendingCount = data.filter(d => d.status === 'Pending').length;
+      const completedCount = data.filter(d => d.status === 'Completed').length;
+      const cancelCount = data.filter(d => d.status === 'Cancel').length;
+
+      const handleChange = (index, field, value) => {
+        const newData = [...data];
+        const row = { ...newData[index] };
+        
+        row[field] = value;
+
+        if (field === 'table') {
+           row.seat = '';
+           row.player = '';
+           if (value !== '') {
+               const selectedTable = tables.find(t => t.id === value);
+               if (selectedTable && selectedTable.blindPrefix) {
+                   const blindMatch = BLINDS.find(b => b.prefix === selectedTable.blindPrefix);
+                   if (blindMatch) {
+                       row.blind = blindMatch.blind.replace(/\$/g, '').replace(/ /g, '').replace('|', '/');
+                       if (!row.reqTime) row.reqTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                   }
+               }
+           }
+        }
+
+        if (field === 'seat' && row.table && value !== '') {
+           const selectedTable = tables.find(t => t.id === row.table);
+           if (selectedTable) {
+              let seatIndex = -1;
+              if (value.startsWith('Seat ')) seatIndex = parseInt(value.replace('Seat ', '')) - 1;
+              else if (value === 'Spare') seatIndex = 9;
+              
+              if (seatIndex >= 0 && seatIndex < 10) {
+                 const playerAtSeat = selectedTable.seats[seatIndex];
+                 if (playerAtSeat) {
+                    const playerStr = `${playerAtSeat.id} (${playerAtSeat.nickName})`;
+                    row.player = playerStr;
+                    if (!row.blind && selectedTable.blindPrefix) {
+                        const blindMatch = BLINDS.find(b => b.prefix === selectedTable.blindPrefix);
+                        if (blindMatch) row.blind = blindMatch.blind.replace(/\$/g, '').replace(/ /g, '').replace('|', '/');
+                    }
+                    if (!row.reqTime) row.reqTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                    
+                    if (onCheckPenalty) {
+                        onCheckPenalty(playerStr, null, () => {
+                            setTimeout(() => {
+                                const revertedData = [...data];
+                                revertedData[index].player = '';
+                                revertedData[index].seat = '';
+                                updateData(revertedData);
+                            }, 50);
+                        });
+                    }
+                 } else row.player = '';
+              }
+           }
+        }
+
+        if (field === 'blind' && value !== '' && !row.reqTime) row.reqTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        if (field === 'status' && value !== '') row.movedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+
+        newData[index] = row;
+        updateData(newData);
+      };
+
+      const handleClearCompleted = () => {
+          const completedIndices = [];
+          const completedRows = [];
+          data.forEach((row, idx) => {
+              if (row.status === 'Completed' || row.status === 'Cancel') {
+                  completedIndices.push(idx);
+                  completedRows.push(row);
+              }
+          });
+          if (completedIndices.length > 0) bulkDelete(completedIndices, completedRows);
+      };
+
+      return (
+        <div className="bg-gray-50 text-black rounded-lg shadow-2xl h-full flex flex-col w-full overflow-hidden border border-gray-300">
+          <div className="flex flex-col sm:flex-row justify-between items-center p-4 sm:p-6 pb-2 sm:pb-4 gap-4 bg-white border-b border-gray-200 shrink-0">
+            <div className="flex flex-col items-center sm:items-start">
+               <h2 className="text-xl sm:text-2xl font-black tracking-wider text-gray-800 uppercase mb-2">Movement List (Seat/Table Transfer)</h2>
+               <div className="flex gap-2">
+                 <span className="bg-yellow-100 text-yellow-800 border border-yellow-200 px-2 py-0.5 rounded text-xs font-bold">Pending: {pendingCount}</span>
+                 <span className="bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded text-xs font-bold">Completed: {completedCount}</span>
+                 <span className="bg-red-100 text-red-800 border border-red-200 px-2 py-0.5 rounded text-xs font-bold">Canceled: {cancelCount}</span>
+               </div>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button onClick={handleClearCompleted} className="flex-1 sm:flex-none bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-50 transition text-sm shadow flex items-center justify-center gap-1">
+                <Icons.CheckDouble /> Clear Finished
+              </button>
+              <button onClick={onBack} className="flex-1 sm:flex-none bg-gray-800 text-white px-4 py-2 rounded font-bold hover:bg-gray-700 transition text-sm shadow">
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-auto w-full custom-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[750px] lg:min-w-[1000px] relative">
+              <thead>
+                <tr className="bg-[#1e293b] text-white shadow-[0_2px_4px_rgba(0,0,0,0.1)]">
+                  <th className="sticky left-0 z-20 border-b border-[#334155] p-2 w-8 sm:w-10 text-center bg-[#1e293b] shadow-[2px_0_4px_rgba(0,0,0,0.2)]">#</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Table</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-20 sm:w-24">Seat</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-28">
+                     <div className="flex flex-col items-start">
+                       <span>Blinds</span>
+                       <select className="mt-1 text-black bg-gray-200 text-[10px] sm:text-xs px-1 py-0.5 rounded w-full outline-none" value={filterBlind} onChange={e => setFilterBlind(e.target.value)}>
+                          <option value="All">All Blinds</option>
+                          {blindOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                       </select>
+                     </div>
+                  </th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2">Player Name / Queue</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Req Time</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Status</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-24">Moved Time</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 min-w-[200px]">Transfer To / Remark</th>
+                  <th className="sticky top-0 z-10 bg-[#1e293b] border-b border-[#334155] p-2 w-16 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((row, originalIndex) => ({ row, originalIndex }))
+                     .filter(item => {
+                         if (filterBlind === 'All') return true;
+                         const isEmpty = !item.row.table && !item.row.blind && !item.row.player && !item.row.status;
+                         return item.row.blind === filterBlind || isEmpty;
+                     })
+                     .map((item) => {
+                  const { row, originalIndex } = item;
+                  
+                  let rowClass = "transition-colors border-b border-gray-300 min-h-[48px] ";
+                  let leftStickyColor = "bg-white"; 
+                  if (!row.table && !row.player && !row.status) { rowClass += "bg-white hover:bg-gray-50 opacity-60"; leftStickyColor = "bg-white"; } 
+                  else if (row.status === 'Completed') { rowClass += "bg-green-50 hover:bg-green-100"; leftStickyColor = "bg-green-50"; } 
+                  else if (row.status === 'Cancel') { rowClass += "bg-red-50 hover:bg-red-100"; leftStickyColor = "bg-red-50"; } 
+                  else if (row.status === 'Pending') { rowClass += "bg-yellow-50 hover:bg-yellow-100"; leftStickyColor = "bg-yellow-50"; } 
+                  else { rowClass += "bg-white hover:bg-gray-50"; }
+
+                  let statusColorClass = "w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 rounded font-bold text-xs sm:text-sm ";
+                  if (row.status === 'Pending') statusColorClass += "text-yellow-600";
+                  else if (row.status === 'Completed') statusColorClass += "text-green-600";
+                  else if (row.status === 'Cancel') statusColorClass += "text-red-600";
+                  else statusColorClass += "text-black";
+
+                  return (
+                    <tr key={originalIndex} className={rowClass}>
+                      <td className={`sticky left-0 z-10 p-1 text-center font-bold text-gray-500 ${leftStickyColor} shadow-[2px_0_4px_rgba(0,0,0,0.05)]`}>{originalIndex + 1}</td>
+                      <td className="p-1">
+                         <select value={row.table} onChange={e => handleChange(originalIndex, 'table', e.target.value)} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300">
+                           <option value=""></option>
+                           {tableOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                         </select>
+                      </td>
+                      <td className="p-1">
+                         <select value={row.seat || ''} onChange={e => handleChange(originalIndex, 'seat', e.target.value)} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300">
+                           <option value=""></option>
+                           {seatOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                         </select>
+                      </td>
+                      <td className="p-1">
+                         <select value={row.blind} onChange={e => handleChange(originalIndex, 'blind', e.target.value)} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300">
+                           <option value=""></option>
+                           {blindOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                         </select>
+                      </td>
+                      <td className="p-1">
+                         <input type="text" value={row.player} onChange={e => handleChange(originalIndex, 'player', e.target.value)} onBlur={e => { if (e.target.value && onCheckPenalty) onCheckPenalty(e.target.value, null, () => handleChange(originalIndex, 'player', '')); }} className="w-full h-full p-1.5 sm:p-2 bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black text-xs sm:text-sm rounded border border-transparent hover:border-gray-300 font-medium" />
+                      </td>
+                      <td className="p-1">
+                         <input type="text" value={row.reqTime} onChange={e => handleChange(originalIndex, 'reqTime', e.target.value)} className="w-full h-full p-1.5 sm:p-2 text-center bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-300 text-xs sm:text-sm rounded border border-transparent hover:border-gray-300" placeholder="--:--" />
+                      </td>
+                      <td className="p-1">
+                         <select value={row.status} onChange={e => handleChange(originalIndex, 'status', e.target.value)} className={statusColorClass + " border border-transparent hover:border-gray-300"}>
+                           <option value=""></option>
+                           {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                         </select>
+                      </td>
+                      <td className="p-1">
+                         <input type="text" value={row.movedTime} onChange={e => handleChange(originalIndex, 'movedTime', e.target.value)} className="w-full h-full p-1.5 sm:p-2 text-center bg-transparent outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-300 text-xs sm:text-sm rounded border border-transparent hover:border-gray-300" placeholder="--:--" />
+                      </td>
+                      <td className="p-1">
+                         <div className="flex flex-col gap-0.5 w-full h-full bg-transparent rounded focus-within:ring-2 focus-within:ring-blue-500 border border-transparent hover:border-gray-300">
+                             <select className="w-full bg-gray-200 text-gray-700 text-[10px] sm:text-xs rounded outline-none cursor-pointer" value="" onChange={e => { if (e.target.value !== '') { if (e.target.value === '1hr' || e.target.value === '2hr') onApplyPenalty(originalIndex, row, e.target.value === '1hr' ? 1 : 2); e.target.value = ''; } }}>
+                                 <option value="">Quick Remark...</option>
+                                 <option value="1hr">Cancel 1 hr cannot queue</option>
+                                 <option value="2hr">Cancel 2 hrs cannot queue</option>
+                             </select>
+                             <input type="text" value={row.remark} onChange={e => handleChange(originalIndex, 'remark', e.target.value)} className="w-full bg-transparent outline-none text-black text-xs sm:text-sm font-medium mt-0.5 px-1" placeholder="Type remark..." />
+                         </div>
+                      </td>
+                      <td className="p-1 text-center">
+                         {(row.player || row.table || row.blind || row.status) ? <button onClick={() => requestDelete(originalIndex, row)} className="bg-red-600 text-white px-2 py-1 m-1 text-[10px] sm:text-xs rounded hover:bg-red-500 font-bold transition">Clear</button> : null}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
     function App() {
       const [view, setView] = useState(() => {
         const params = new URLSearchParams(window.location.search);
@@ -1377,7 +1419,6 @@
       });
 
       const updateCloudState = async (updates) => {
-        // Prevent Firebase crashes by stripping out 'undefined' values
         const cleanUpdates = {};
         for (let key in updates) {
           if (updates[key] !== undefined) {
@@ -2266,7 +2307,6 @@
         });
       };
 
-      // --- Rendering Logic ---
       return (
         <div className="min-h-screen bg-black text-gray-100 font-sans flex flex-col h-screen overflow-hidden">
           
@@ -2582,7 +2622,6 @@
             </footer>
           ) : null}
 
-          {}
           {showNewDayReminder && view === 'admin-dash' ? (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
               <div className="bg-[#1e293b] border border-red-500 p-6 rounded-xl shadow-2xl max-w-md w-full text-center">
@@ -2628,7 +2667,7 @@
           ) : null}
 
           {resetModalOpen ? <AdminResetModal onClose={() => setResetModalOpen(false)} onReset={handleAdvancedReset} /> : null}
-          {adminRegisterOpen ? <AdminFastRegisterModal visibleBlinds={visibleBlindsList} onClose={() => setAdminRegisterOpen(false)} onRegister={handleAdminFastRegister} /> : null}
+          {adminRegisterOpen ? <AdminFastRegisterModal visibleBlinds={visibleBlindsList} onClose={() => setAdminRegisterOpen(false)} onRegister={handleAdminFastRegister} setDialog={setDialog} /> : null}
           {blindModalOpen ? <AdminBlindModal blindVis={blindVis} updateBlindVis={(v) => updateCloudState({ blindVis: v })} autoBlindEnabled={autoBlindEnabled} updateAutoBlindEnabled={(v) => updateCloudState({ autoBlindEnabled: v })} weeklyPresets={weeklyPresets} updateWeeklyPresets={(v) => updateCloudState({ weeklyPresets: v })} onClose={() => setBlindModalOpen(false)} now={now} /> : null}
 
           {restoreModalOpen ? (
