@@ -66,6 +66,15 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+
+    input[type=number].no-spinners::-webkit-inner-spin-button, 
+    input[type=number].no-spinners::-webkit-outer-spin-button { 
+        -webkit-appearance: none; 
+        margin: 0; 
+    }
+    input[type=number].no-spinners {
+        -moz-appearance: textfield;
+    }
   </style>
 </head>
 <body>
@@ -98,6 +107,44 @@
     const MASTER_PASSWORD = 'Master8888!';
     const CALLING_TIME_LIMIT_MS = 10 * 60 * 1000; 
 
+    // --- NEW TOURNAMENT CONSTANTS ---
+    const TOURNAMENT_EVENTS = [
+        { id: 'BH', name: 'Bounty Hunter', buyIn: 1000, startingChips: 30000, blindDuration: 20, isBounty: true },
+        { id: 'ME-1A', name: 'Main Event Flight 1A', buyIn: 1500, startingChips: 30000, blindDuration: 30, isMainEvent: true },
+        { id: 'HT', name: 'Hyper Turbo', buyIn: 500, startingChips: 20000, blindDuration: 10 },
+        { id: 'ME-1B', name: 'Main Event Flight 1B', buyIn: 1500, startingChips: 30000, blindDuration: 30, isMainEvent: true },
+        { id: 'MHR-HT', name: 'Mini High Roller Hyper Turbo', buyIn: 1000, startingChips: 20000, blindDuration: 10 },
+        { id: 'ME-1C', name: 'Main Event Flight 1C', buyIn: 1500, startingChips: 30000, blindDuration: 30, isMainEvent: true },
+        { id: 'HR-HT', name: 'High Roller Hyper Turbo', buyIn: 2000, startingChips: 20000, blindDuration: 10 },
+        { id: 'ME-FINAL', name: 'Main Event Final', buyIn: 0, startingChips: 0, blindDuration: 30, isFinal: true }
+    ];
+
+    const TOURNAMENT_BLIND_STRUCTURE = [
+        { level: 1, sb: 100, bb: 100, ante: 100 },
+        { level: 2, sb: 100, bb: 200, ante: 200 },
+        { level: 3, sb: 200, bb: 300, ante: 300 },
+        { level: 4, sb: 200, bb: 400, ante: 400 },
+        { isBreak: true, duration: 15, label: "Break" },
+        { level: 5, sb: 300, bb: 500, ante: 500 },
+        { level: 6, sb: 300, bb: 600, ante: 600 },
+        { level: 7, sb: 400, bb: 800, ante: 800 },
+        { level: 8, sb: 500, bb: 1000, ante: 1000 },
+        { isBreak: true, duration: 15, label: "End of Registration / Chip Race 100s" },
+        { level: 9, sb: 1000, bb: 1500, ante: 1500 },
+        { level: 10, sb: 1000, bb: 2000, ante: 2000 },
+        { level: 11, sb: 1000, bb: 2500, ante: 2500 },
+        { level: 12, sb: 1500, bb: 3000, ante: 3000 },
+        { level: 13, sb: 2000, bb: 4000, ante: 4000 },
+        { level: 14, sb: 3000, bb: 5000, ante: 5000 },
+        { level: 15, sb: 3000, bb: 6000, ante: 6000 },
+        { level: 16, sb: 4000, bb: 8000, ante: 8000 },
+        { isBreak: true, duration: 15, label: "Break / Chip Race 500s" },
+        { level: 17, sb: 5000, bb: 10000, ante: 10000 },
+        { level: 18, sb: 6000, bb: 12000, ante: 12000 },
+        { level: 19, sb: 8000, bb: 16000, ante: 16000 },
+        { level: 20, sb: 10000, bb: 20000, ante: 20000 },
+    ];
+
     const DEFAULT_BLIND_PRESETS = {
         0: { A: false, B: true, C: true, D: false, E: true, F: true, G: false }, 
         1: { A: true, B: true, C: true, D: false, E: true, F: true, G: false },  
@@ -125,8 +172,13 @@
       Expand: () => <svg className="w-4 h-4 sm:w-4 sm:h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>,
       Edit: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>,
       Trash: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>,
-      Plus: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+      Plus: () => <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>,
+      Play: () => <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4l12 6-12 6z"></path></svg>,
+      Pause: () => <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4h3v12H5V4zm7 0h3v12h-3V4z"></path></svg>,
+      Settings: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
     };
+
+    // --- RE-INTEGRATED COMPONENTS ---
 
     function CameraScanner({ title, type, onCapture, onClose }) {
       const videoRef = useRef(null);
@@ -136,7 +188,10 @@
         let currentStream = null;
         const startCamera = async () => {
           try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            // Requesting high resolution for better OCR
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } 
+            });
             if (videoRef.current) videoRef.current.srcObject = stream;
             currentStream = stream;
           } catch (err) {
@@ -153,8 +208,11 @@
           canvas.width = videoRef.current.videoWidth;
           canvas.height = videoRef.current.videoHeight;
           const ctx = canvas.getContext('2d');
+          
+          // Apply extreme contrast and grayscale to isolate text
+          ctx.filter = 'grayscale(100%) contrast(300%) brightness(120%)';
           ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          // Return full data URL for Tesseract
+          
           onCapture(canvas.toDataURL('image/jpeg'));
         }
       };
@@ -169,7 +227,9 @@
             {error ? <p className="text-red-400 px-6 text-center leading-relaxed">{error}</p> : <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover"></video>}
             {!error && (
               <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center border-[40px] border-black/40 border-solid">
-                 <div className={`border-2 border-[#D8B673] border-dashed rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.4)] ${type === 'ticket' ? 'w-56 sm:w-64 h-[28rem] sm:h-[32rem]' : 'w-full max-w-sm h-56 sm:h-64'}`}></div>
+                 <div className={`border-2 border-[#D8B673] border-dashed rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.4)] relative overflow-hidden ${type === 'ticket' ? 'w-56 sm:w-64 h-[28rem] sm:h-[32rem]' : 'w-full max-w-sm h-56 sm:h-64'}`}>
+                     <div className="absolute top-0 left-0 w-full h-1 bg-[#D8B673] shadow-[0_0_10px_#D8B673] animate-[scan_2s_linear_infinite]"></div>
+                 </div>
                  <p className="text-white font-bold mt-4 tracking-widest text-shadow drop-shadow-md">ALIGN WITHIN BOX</p>
               </div>
             )}
@@ -179,6 +239,7 @@
               <div className="w-12 h-12 rounded-full bg-white border border-gray-300"></div>
             </button>
           </div>
+          <style>{`@keyframes scan { 0% { top: 0%; } 50% { top: 100%; } 100% { top: 0%; } }`}</style>
         </div>
       );
     }
@@ -210,43 +271,40 @@
         setIsProcessing(true);
 
         try {
-            // Using Tesseract.js (Offline Client-Side OCR, No API Key needed)
-            const result = await Tesseract.recognize(dataUrl, 'eng');
+            // Tesseract OCR configured to only look for numbers and A-F
+            const result = await Tesseract.recognize(dataUrl, 'eng', {
+                tessedit_char_whitelist: '0123456789ABCDEFabcdefXxOoIiLlZzSswWgG'
+            });
             let text = result.data.text;
             
-            if (type === 'ticket') {
-                // 1. Clean the text to fix common OCR errors first
-                const cleanText = (t) => t.replace(/\s+/g, '').toUpperCase().replace(/[O]/g, '0').replace(/[S]/g, '5').replace(/[LI]/g, '1');
-                text = cleanText(text);
+            // Clean up common OCR mistakes before parsing
+            const cleanText = (t) => t.replace(/\s+/g, '').toUpperCase()
+                                     .replace(/[O]/g, '0').replace(/[S]/g, '5')
+                                     .replace(/[LI]/g, '1').replace(/[Z]/g, '2');
 
-                // 2. Extract Phone Number First
-                // Look for a sequence of 'X's followed by 4 digits.
-                const phoneRegex = /[X*]{3,}[^0-9\n]*([0-9]{4})/;
+            if (type === 'ticket') {
+                // 1. EXTRACT PASSWORD FIRST (to prevent it being read as a queue)
+                const phoneRegex = /[xX*]{3,}[^0-9oOsSlLiI\n]*([0-9oOsSlLiI]{4})/i;
                 const phoneMatch = text.match(phoneRegex);
-                let parsedPhone = '';
+                const phoneLast4 = phoneMatch ? cleanText(phoneMatch[1]) : '';
                 
+                // Remove the password digits from the text pool so they aren't parsed as a Queue ID later
                 if (phoneMatch) {
-                    parsedPhone = phoneMatch[1];
-                    setPhone(parsedPhone);
-                    // Remove the phone number string from the text so it doesn't get confused as a queue
-                    text = text.replace(phoneMatch[0], ''); 
+                    text = text.replace(phoneMatch[0], '');
                 }
 
-                // 3. Extract Queue Numbers
-                // Look for A-G followed exactly by 4 digits
-                const queueRegex = /([A-G][0-9]{4})/g;
+                // 2. EXTRACT QUEUES
+                const queueRegex = /([A-F][0-9oOsSlLiIzZ]{3,})/gi;
                 const queueMatches = text.match(queueRegex) || [];
-                
-                // Deduplicate matched queues
-                const parsedQueues = [...new Set(queueMatches)].slice(0, 3);
+                const scannedQueues = [...new Set(queueMatches.map(cleanText))].slice(0, 3);
 
-                if (parsedQueues.length > 0) {
-                    const newEntries = parsedQueues.map(qNum => {
+                if (scannedQueues.length > 0) {
+                    const newEntries = scannedQueues.map(qNum => {
                         const prefix = qNum.charAt(0);
                         const bIdx = visibleBlinds.findIndex(b => b.prefix === prefix);
                         return {
                            qNum,
-                           nickName: '', // Let it default to queue automatically on submit
+                           nickName: entries[0]?.nickName || '',
                            memberName: entries[0]?.memberName || '',
                            memberId: entries[0]?.memberId || '',
                            blindIdx: bIdx !== -1 ? bIdx : 0
@@ -254,15 +312,18 @@
                     });
                     setEntries(newEntries);
                 }
+                
+                if (phoneLast4) {
+                    setPhone(phoneLast4);
+                }
 
-                if (parsedQueues.length === 0 && !parsedPhone) {
-                    dialogFn({ type: 'alert', title: 'Scan Failed', message: 'Could not detect valid queue numbers or phone details from the ticket. Please try again.', onConfirm: () => dialogFn(null) });
+                if (scannedQueues.length === 0 && !phoneLast4) {
+                    dialogFn({ type: 'alert', title: 'Scan Failed', message: 'Could not detect valid queue numbers or phone details from the ticket. Please ensure the ticket is in focus and try again.', onConfirm: () => dialogFn(null) });
                 }
             } else if (type === 'card') {
-                // Member card scanning logic finding 11 digits
-                const idMatch = text.match(/\b\d{11}\b/);
+                const idMatch = text.match(/\b[0-9oOsSlLiIzZ]{11}\b/);
                 if (idMatch) {
-                    setEntries(prev => prev.map(e => ({ ...e, memberId: idMatch[0] })));
+                    setEntries(prev => prev.map(e => ({ ...e, memberId: cleanText(idMatch[0]) })));
                 } else {
                     dialogFn({ type: 'alert', title: 'Scan Failed', message: 'Could not automatically read the 11-digit member ID. Please try again.', onConfirm: () => dialogFn(null) });
                 }
@@ -273,6 +334,15 @@
         } finally {
             setIsProcessing(false);
         }
+      };
+
+      const handleFileUpload = (e, type) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (event) => processCapturedImage(event.target.result, type);
+          reader.readAsDataURL(file);
+          e.target.value = ''; // Reset input
       };
 
       const addEntry = () => {
@@ -307,7 +377,7 @@
         if (validEntries.length > 0 && phone.length >= 4) {
           const mapped = validEntries.map(e => ({ 
               qNum: e.qNum, 
-              nickName: e.nickName.trim() || e.qNum.trim(), // Defaults to Queue Number if left blank
+              nickName: e.nickName.trim() || e.qNum.trim(), // Default to Queue number if blank
               memberName: e.memberName,
               memberId: e.memberId,
               blindObj: visibleBlinds[e.blindIdx] 
@@ -335,8 +405,8 @@
           {isProcessing ? (
              <div className="absolute inset-0 bg-black/80 z-[60] flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
                 <div className="ai-spinner mb-4"></div>
-                <p className="text-[#D8B673] font-bold tracking-widest text-sm uppercase text-center px-4">
-                    Analyzing Text...<br/><span className="text-[10px] text-gray-400 normal-case">(May take a moment)</span>
+                <p className="text-[#D8B673] font-bold tracking-widest text-sm uppercase text-center px-4 mt-2">
+                    Analyzing Text...<br/><span className="text-[10px] text-gray-400 normal-case tracking-normal">(Applying high-contrast filters)</span>
                 </p>
              </div>
           ) : null}
@@ -345,22 +415,50 @@
           <p className="text-xs sm:text-sm text-gray-400 text-center mb-6">Enter up to 3 queues from your ticket(s).</p>
           
           <div className={`flex gap-2 mb-6 ${requireMemberInfo ? '' : 'justify-center'}`}>
-            <button 
-              onClick={() => setActiveCamera('ticket')} 
-              className={`flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg ${requireMemberInfo ? '' : 'max-w-[200px]'}`}
-            >
-                <Icons.Camera />
-                <span className="text-[10px] sm:text-xs font-bold">Scan Queue Ticket</span>
-            </button>
+            <div className="flex flex-col gap-0.5 flex-1 max-w-[200px]">
+                <div className="flex items-stretch w-full shadow-lg rounded-lg overflow-hidden group">
+                    <button 
+                      onClick={() => setActiveCamera('ticket')} 
+                      className="flex-1 flex items-center justify-center gap-2 bg-indigo-900/60 hover:bg-indigo-800 border-y border-l border-indigo-700/50 text-indigo-300 py-3 transition font-bold text-[10px] sm:text-xs"
+                    >
+                        <Icons.Camera /> Scan Queue Ticket
+                    </button>
+                    <div className="relative flex items-stretch">
+                       <button onClick={(e) => { e.currentTarget.nextElementSibling.classList.toggle('hidden'); }} className="bg-indigo-900/40 hover:bg-indigo-800 border-y border-r border-indigo-700/50 px-2 text-indigo-300 transition">
+                           <Icons.ChevronDown />
+                       </button>
+                       <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded shadow-xl hidden z-50 overflow-hidden">
+                           <input type="file" id="upload-ticket" accept="image/*" className="hidden" onChange={(e) => { handleFileUpload(e, 'ticket'); e.target.parentElement.classList.add('hidden'); }} />
+                           <button onClick={(e) => document.getElementById('upload-ticket').click()} className="w-full flex items-center justify-start gap-2 px-4 py-3 hover:bg-gray-700 text-gray-200 text-xs font-bold transition">
+                               <Icons.Upload /> Upload Photo Instead
+                           </button>
+                       </div>
+                    </div>
+                </div>
+            </div>
 
             {requireMemberInfo ? (
-              <button 
-                onClick={() => setActiveCamera('card')} 
-                className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg"
-              >
-                  <Icons.Camera />
-                  <span className="text-[10px] sm:text-xs font-bold">Scan Member Card</span>
-              </button>
+              <div className="flex flex-col gap-0.5 flex-1">
+                  <div className="flex items-stretch w-full shadow-lg rounded-lg overflow-hidden group">
+                      <button 
+                        onClick={() => setActiveCamera('card')} 
+                        className="flex-1 flex items-center justify-center gap-2 bg-indigo-900/60 hover:bg-indigo-800 border-y border-l border-indigo-700/50 text-indigo-300 py-3 transition font-bold text-[10px] sm:text-xs"
+                      >
+                          <Icons.Camera /> Scan Member Card
+                      </button>
+                      <div className="relative flex items-stretch">
+                         <button onClick={(e) => { e.currentTarget.nextElementSibling.classList.toggle('hidden'); }} className="bg-indigo-900/40 hover:bg-indigo-800 border-y border-r border-indigo-700/50 px-2 text-indigo-300 transition">
+                             <Icons.ChevronDown />
+                         </button>
+                         <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded shadow-xl hidden z-50 overflow-hidden">
+                             <input type="file" id="upload-card" accept="image/*" className="hidden" onChange={(e) => { handleFileUpload(e, 'card'); e.target.parentElement.classList.add('hidden'); }} />
+                             <button onClick={(e) => document.getElementById('upload-card').click()} className="w-full flex items-center justify-start gap-2 px-4 py-3 hover:bg-gray-700 text-gray-200 text-xs font-bold transition">
+                                 <Icons.Upload /> Upload Photo Instead
+                             </button>
+                         </div>
+                      </div>
+                  </div>
+              </div>
             ) : null}
           </div>
 
@@ -387,7 +485,7 @@
 
                 <div className="mb-3">
                   <label className="block text-[10px] sm:text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">Nick Name</label>
-                  <input type="text" value={entry.nickName} onChange={(e) => updateEntry(index, 'nickName', e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-[#D8B673] font-bold tracking-wider" placeholder="Optional (Defaults to Queue)" />
+                  <input type="text" value={entry.nickName} onChange={(e) => updateEntry(index, 'nickName', e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:border-[#D8B673] font-bold tracking-wider" placeholder="(Optional) Defaults to Queue" />
                 </div>
 
                 {requireMemberInfo ? (
@@ -693,465 +791,6 @@
       );
     }
 
-    function QueueBoard({ queues, visibleBlinds, isWallDisplay = false }) {
-      const activeQueues = queues.filter(q => ['Confirmed', 'Next', 'Calling', "Time's Up", 'Arrived'].includes(q.status));
-
-      return (
-        <div className={`bg-black rounded-lg border border-gray-700 shadow-2xl relative w-full ${isWallDisplay ? 'h-full flex flex-col' : 'overflow-hidden'}`}>
-          <div className={`w-full custom-scrollbar ${isWallDisplay ? 'flex-1 overflow-hidden' : 'overflow-x-auto pb-2'}`}>
-            <table className={`w-full table-fixed min-w-[700px] sm:min-w-[1000px] border-collapse relative ${isWallDisplay ? 'h-full' : ''}`}>
-              <thead>
-                <tr>
-                  <th className={`sticky left-0 z-20 bg-black border-r border-b border-gray-700 p-2 text-center text-white font-bold shadow-[2px_0_4px_rgba(0,0,0,0.5)] ${isWallDisplay ? 'w-32 sm:w-48 text-xl sm:text-2xl h-[10%]' : 'w-20 sm:w-24 text-[10px] sm:text-sm'}`}>
-                    Blind<br/><span className="text-[#64D8D8]">Buy-in</span><br/><span className="text-red-500 mt-1 block">Total In Waiting List</span>
-                  </th>
-                  {visibleBlinds.map(b => {
-                    const count = activeQueues.filter(q => q.blindObj.prefix === b.prefix).length;
-                    return (
-                      <th key={b.prefix} className={`bg-black border-r border-b border-gray-700 p-2 text-center last:border-r-0 ${isWallDisplay ? 'h-[10%]' : ''}`}>
-                        <div className={`text-white font-bold whitespace-nowrap ${isWallDisplay ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`}>{b.blind}</div>
-                        <div className={`text-[#64D8D8] font-bold whitespace-nowrap mt-1 ${isWallDisplay ? 'text-lg sm:text-xl' : 'text-[10px] sm:text-xs'}`}>{b.buyIn}</div>
-                        <div className={`text-red-500 font-bold whitespace-nowrap mt-1 ${isWallDisplay ? 'text-xl sm:text-2xl' : 'text-xs sm:text-sm'}`}>{count}</div>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: MAX_ROWS }).map((_, rowIndex) => {
-                  const rowBg = rowIndex % 2 !== 0 ? 'bg-[#333333]' : 'bg-black';
-                  return (
-                    <tr key={rowIndex} className={`${rowBg} ${isWallDisplay ? 'h-[9%]' : ''}`}>
-                      <td className={`sticky left-0 z-10 border-r border-gray-700 p-2 sm:p-3 text-center text-[#64D8D8] font-bold border-b ${rowBg} shadow-[2px_0_4px_rgba(0,0,0,0.5)] ${isWallDisplay ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-base'}`}>
-                        {rowIndex + 1}
-                      </td>
-                      {visibleBlinds.map(b => {
-                        const queue = activeQueues.filter(q => q.blindObj.prefix === b.prefix)[rowIndex];
-                        let cellClass = `p-2 sm:p-3 text-center border-r border-b border-gray-700 last:border-r-0 align-middle font-bold ${isWallDisplay ? 'text-3xl sm:text-4xl' : 'h-[45px] sm:h-[60px] text-sm sm:text-lg'} `;
-                        if (queue?.status === 'Calling') cellClass += "bg-[#E63946] text-black shadow-inner animate-pulse";
-                        else if (queue?.status === "Time's Up") cellClass += "bg-red-900 text-red-200 shadow-inner";
-                        else if (queue?.status === 'Arrived') cellClass += "bg-[#4ADE80] text-black shadow-inner"; 
-                        else if (queue) cellClass += "text-[#4ADE80]"; 
-                        else cellClass += "text-transparent";
-                        return <td key={b.prefix} className={cellClass}>{queue ? queue.id : ''}</td>;
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      );
-    }
-
-    function AdminBlindModal({ blindVis, updateBlindVis, autoBlindEnabled, updateAutoBlindEnabled, weeklyPresets, updateWeeklyPresets, onClose, now }) {
-      const [tab, setTab] = useState('live'); 
-      const [editDay, setEditDay] = useState(1); 
-      const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      
-      const td = new Date(now);
-      if (td.getHours() < 4) td.setDate(td.getDate() - 1);
-      const currentDayIdx = td.getDay();
-      const currentDayStr = daysOfWeek[currentDayIdx];
-
-      const applyTodayPreset = () => {
-         const preset = weeklyPresets[currentDayIdx];
-         const newVis = {};
-         BLINDS.forEach(b => newVis[b.prefix] = preset[b.prefix] !== false);
-         updateBlindVis(newVis);
-      };
-
-      return (
-         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1e293b] border border-[#475569] rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[90vh] overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b border-gray-600 bg-[#0f172a]">
-              <h3 className="text-lg font-bold text-[#D8B673]">Table Blind Visibility</h3>
-              <button onClick={onClose} className="text-gray-400 hover:text-white"><Icons.Close /></button>
-            </div>
-
-            <div className="flex bg-gray-800 text-xs sm:text-sm shrink-0">
-                <button onClick={() => setTab('live')} className={`flex-1 py-3 font-bold transition ${tab === 'live' ? 'bg-[#334155] text-white border-b-2 border-[#D8B673]' : 'text-gray-400 hover:text-gray-200'}`}>Live Settings</button>
-                <button onClick={() => setTab('preset')} className={`flex-1 py-3 font-bold transition ${tab === 'preset' ? 'bg-[#334155] text-white border-b-2 border-[#D8B673]' : 'text-gray-400 hover:text-gray-200'}`}>Advanced Presets</button>
-            </div>
-
-            <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar">
-                {tab === 'live' ? (
-                   <div className="space-y-4">
-                      <div className="bg-gray-800 p-3 rounded border border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                         <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Current Trading Day</p>
-                            <p className="text-white text-sm font-bold">{currentDayStr} <span className="text-gray-400 font-normal text-xs">(Resets 04:00 AM)</span></p>
-                         </div>
-                         <button onClick={applyTodayPreset} className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-1.5 px-3 rounded shadow transition w-full sm:w-auto shrink-0">
-                            Apply {currentDayStr} Preset
-                         </button>
-                      </div>
-                      <div className="space-y-3">
-                        <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1 border-b border-gray-700 pb-1">Live Board Visibility</p>
-                        {BLINDS.map(b => (
-                          <div key={b.prefix} className="flex justify-between items-center bg-black/40 p-2 rounded border border-gray-700/50">
-                            <span className="text-sm text-gray-200 font-bold">{b.blind} <span className="text-xs text-gray-500 font-normal ml-1">({b.buyIn})</span></span>
-                            <button onClick={() => updateBlindVis({...blindVis, [b.prefix]: !blindVis[b.prefix]})} className={`text-xs font-bold px-3 py-1 rounded-full border transition-colors w-20 ${blindVis[b.prefix] !== false ? 'bg-[#d8b46e] text-black border-[#c29e5a]' : 'bg-gray-800 text-gray-400 border-gray-600'}`}>
-                              {blindVis[b.prefix] !== false ? 'Showing' : 'Hidden'}
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                   </div>
-                ) : null}
-
-                {tab === 'preset' ? (
-                   <div className="space-y-4">
-                      <label className="flex items-center justify-between p-3 bg-gray-800 rounded border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition">
-                         <div className="pr-2">
-                            <span className="text-white text-sm font-bold block">Auto-Apply Daily Presets</span>
-                            <span className="text-gray-400 text-[10px] sm:text-xs mt-0.5 block leading-tight">Automatically applies the day's preset at 04:00 AM.</span>
-                         </div>
-                         <div className={`relative inline-flex h-6 w-11 items-center rounded-full shrink-0 transition-colors ${autoBlindEnabled ? 'bg-[#D8B673]' : 'bg-gray-600'}`}>
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoBlindEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                         </div>
-                         <input type="checkbox" className="hidden" checked={autoBlindEnabled} onChange={e => updateAutoBlindEnabled(e.target.checked)} />
-                      </label>
-                      <div className="pt-2">
-                         <label className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-2 block">Configure Weekly Schedule</label>
-                         <div className="flex flex-wrap gap-1.5 mb-4">
-                            {[1,2,3,4,5,6,0].map(dayIdx => (
-                               <button key={dayIdx} onClick={() => setEditDay(dayIdx)} className={`px-3 py-1.5 text-xs font-bold rounded-full transition border ${editDay === dayIdx ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200'}`}>
-                                  {daysOfWeek[dayIdx].substring(0,3)}
-                               </button>
-                            ))}
-                         </div>
-                         <div className="bg-black/40 p-3 rounded-lg border border-gray-700 space-y-3">
-                            <h4 className="text-sm text-[#D8B673] font-bold border-b border-gray-700 pb-2 mb-3">{daysOfWeek[editDay]} Preset</h4>
-                            {BLINDS.map(b => {
-                               const isVisible = weeklyPresets[editDay][b.prefix] !== false; 
-                               return (
-                                  <label key={b.prefix} className="flex items-center justify-between cursor-pointer group">
-                                     <span className="text-sm text-gray-200 font-bold group-hover:text-white transition">{b.blind} <span className="text-xs text-gray-500 font-normal">({b.buyIn})</span></span>
-                                     <input type="checkbox" className="w-4 h-4 rounded bg-gray-900 border-gray-600 accent-[#D8B673] cursor-pointer" checked={isVisible} onChange={(e) => {
-                                           const newPresets = {...weeklyPresets};
-                                           newPresets[editDay] = {...newPresets[editDay], [b.prefix]: e.target.checked};
-                                           updateWeeklyPresets(newPresets);
-                                       }} />
-                                  </label>
-                               );
-                            })}
-                         </div>
-                      </div>
-                   </div>
-                ) : null}
-            </div>
-
-            <div className="p-4 border-t border-gray-600 bg-[#0f172a] shrink-0">
-              <button onClick={onClose} className="w-full bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition">Done</button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    function AdminFastRegisterModal({ visibleBlinds, onClose, onRegister, setDialog }) {
-      const [entries, setEntries] = useState([{ qNum: '', blindIdx: 0 }]);
-      const [nickName, setNickName] = useState('');
-      const [phone, setPhone] = useState('');
-      
-      const [activeCamera, setActiveCamera] = useState(false);
-      const [isProcessing, setIsProcessing] = useState(false);
-
-      const processCapturedImage = async (dataUrl) => {
-          setActiveCamera(false);
-          setIsProcessing(true);
-          try {
-              // Tesseract OCR (Client-side, No APIs)
-              const result = await Tesseract.recognize(dataUrl, 'eng');
-              let text = result.data.text;
-              
-              // 1. Clean the text to fix common OCR errors first
-              const cleanText = (t) => t.replace(/\s+/g, '').toUpperCase().replace(/[O]/g, '0').replace(/[S]/g, '5').replace(/[LI]/g, '1');
-              text = cleanText(text);
-
-              // 2. Extract Phone Number First
-              const phoneRegex = /[X*]{3,}[^0-9\n]*([0-9]{4})/;
-              const phoneMatch = text.match(phoneRegex);
-              let phoneLast4 = '';
-              
-              if (phoneMatch) {
-                  phoneLast4 = phoneMatch[1];
-                  setPhone(phoneLast4);
-                  // Remove the phone number string from the text so it doesn't get confused as a queue
-                  text = text.replace(phoneMatch[0], ''); 
-              }
-
-              // 3. Extract Queue Numbers
-              const queueRegex = /([A-G][0-9]{4})/g;
-              const queueMatches = text.match(queueRegex) || [];
-              const scannedQueues = [...new Set(queueMatches)].slice(0, 3);
-
-              if (scannedQueues.length > 0) {
-                  const newEntries = scannedQueues.map(qNum => {
-                      const prefix = qNum.charAt(0);
-                      const bIdx = visibleBlinds.findIndex(b => b.prefix === prefix);
-                      return { qNum, blindIdx: bIdx !== -1 ? bIdx : 0 };
-                  });
-                  setEntries(newEntries);
-              }
-
-              if (scannedQueues.length === 0 && !phoneLast4) {
-                   setDialog({ type: 'alert', title: 'Scan Failed', message: 'Could not detect valid queue numbers or phone details from the ticket. Please try entering them manually.', onConfirm: () => setDialog(null) });
-              }
-          } catch (error) {
-              console.error("OCR Error:", error);
-              setDialog({ type: 'alert', title: 'Scan Error', message: 'An error occurred during text recognition. Please try again.', onConfirm: () => setDialog(null) });
-          } finally {
-              setIsProcessing(false);
-          }
-      };
-
-      const handleRegister = () => {
-        const validEntries = entries.filter(e => e.qNum.trim() !== '');
-        if (validEntries.length === 0 || phone.length < 4) return;
-        const mappedEntries = validEntries.map(e => ({ 
-            qNum: e.qNum, 
-            nickName: nickName.trim() || e.qNum.trim(), // Default to Queue number
-            blindObj: visibleBlinds[e.blindIdx] 
-        }));
-        onRegister(mappedEntries, phone);
-      };
-
-      const handleQNumChange = (index, val) => {
-        const upperVal = val.toUpperCase().trim();
-        const newEntries = [...entries];
-        newEntries[index].qNum = upperVal;
-        if (upperVal.length >= 1) {
-          const prefix = upperVal.charAt(0);
-          const foundIdx = visibleBlinds.findIndex(b => b.prefix === prefix);
-          if (foundIdx !== -1) newEntries[index].blindIdx = foundIdx;
-        }
-        setEntries(newEntries);
-      };
-
-      const addEntry = () => { if (entries.length < 3) setEntries([...entries, { qNum: '', blindIdx: 0 }]); };
-      const removeEntry = (index) => setEntries(entries.filter((_, i) => i !== index));
-      // Nickname is completely optional for validation
-      const isFormValid = entries.some(e => e.qNum.trim() !== '') && phone.length >= 4;
-
-      return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1e293b] border border-[#475569] p-5 sm:p-6 rounded-xl shadow-2xl max-w-sm w-full flex flex-col max-h-[90vh]">
-            
-            {activeCamera ? (
-               <CameraScanner 
-                  title="Scan Queue Ticket"
-                  type="ticket"
-                  onClose={() => setActiveCamera(false)}
-                  onCapture={processCapturedImage}
-               />
-            ) : null}
-
-            {isProcessing ? (
-               <div className="absolute inset-0 bg-black/80 z-[60] flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
-                  <div className="ai-spinner mb-4"></div>
-                  <p className="text-[#D8B673] font-bold tracking-widest text-sm uppercase text-center px-4">
-                      Analyzing Text...<br/><span className="text-[10px] text-gray-400 normal-case">(May take a moment)</span>
-                  </p>
-               </div>
-            ) : null}
-
-            <h3 className="text-lg font-bold text-white mb-4 border-b border-gray-600 pb-2 text-[#D8B673] shrink-0">⚡ Admin Fast Registration</h3>
-            <div className="overflow-y-auto custom-scrollbar pr-1 mb-4 space-y-4">
-              
-              <button onClick={() => setActiveCamera(true)} className="w-full bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2 font-bold text-sm">
-                  <Icons.Camera /> Scan Queue Ticket
-              </button>
-
-              <div className="space-y-4">
-                  {entries.map((entry, index) => (
-                    <div key={index} className="p-3 bg-black/40 border border-gray-700 rounded-lg relative space-y-3">
-                      {index > 0 ? <button onClick={() => removeEntry(index)} className="absolute top-2 right-2 text-red-500 text-xs font-bold hover:text-red-400 bg-red-900/20 px-2 py-1 rounded">Remove</button> : null}
-                      <div>
-                        <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Queue {index + 1}</label>
-                        <input type="text" value={entry.qNum} onChange={e => handleQNumChange(index, e.target.value)} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white uppercase focus:border-[#D8B673] outline-none" placeholder="e.g. A001" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Select Blind</label>
-                        <select value={entry.blindIdx} onChange={e => { const n = [...entries]; n[index].blindIdx = Number(e.target.value); setEntries(n); }} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none">
-                          {visibleBlinds.map((b, i) => <option key={b.prefix} value={i}>{b.prefix} - {b.blind} ({b.buyIn})</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  ))}
-                  {entries.length < 3 ? <button onClick={addEntry} className="w-full py-2 border border-dashed border-gray-600 text-gray-400 rounded-lg hover:bg-gray-800 hover:text-white transition text-xs font-bold">+ Add Another Blinds</button> : null}
-              </div>
-              <div className="pt-2 border-t border-gray-700 space-y-3">
-                <div>
-                  <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Nick Name (Applies to all)</label>
-                  <input type="text" value={nickName} onChange={e => setNickName(e.target.value)} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none" placeholder="Optional (Defaults to Queue)" />
-                </div>
-                <div>
-                  <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Membership / Mobile Number (Last 4 Digits)</label>
-                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none" placeholder="e.g. 4263" />
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button onClick={onClose} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2.5 rounded transition">Cancel</button>
-              <button onClick={handleRegister} disabled={!isFormValid} className="flex-1 bg-[#d8b46e] disabled:opacity-50 hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition">Register</button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    function AdminResetModal({ onClose, onReset }) {
-      const [clearQueues, setClearQueues] = useState(true);
-      const [clearSeats, setClearSeats] = useState(false);
-      const [clearHistory, setClearHistory] = useState(false);
-      const [pass, setPass] = useState('');
-      const [error, setError] = useState('');
-
-      const handleConfirm = () => {
-        if (pass !== ADMIN_PASSWORD) return setError('Invalid Supervisor Password');
-        if (!clearQueues && !clearSeats && !clearHistory) return setError('Please select at least one option to reset.');
-        onReset({ clearQueues, clearSeats, clearHistory });
-      };
-
-      return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1e293b] border border-red-900/50 p-5 sm:p-6 rounded-xl shadow-2xl max-w-sm w-full flex flex-col">
-            <h3 className="text-lg font-bold text-red-400 mb-4 border-b border-gray-600 pb-2 shrink-0">⚠️ Advanced Reset</h3>
-            <div className="space-y-3 mb-6">
-              <p className="text-sm text-gray-300 mb-2">Select the data you wish to clear:</p>
-              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white/5 rounded border border-[#334155] transition-colors">
-                <input type="checkbox" className="w-5 h-5 rounded" checked={clearQueues} onChange={(e) => setClearQueues(e.target.checked)} />
-                <div><span className="text-gray-200 font-bold text-sm block">Active Queue List</span><span className="text-gray-500 text-xs">Clears all waiting/called queues.</span></div>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white/5 rounded border border-[#334155] transition-colors">
-                <input type="checkbox" className="w-5 h-5 rounded" checked={clearSeats} onChange={(e) => setClearSeats(e.target.checked)} />
-                <div><span className="text-gray-200 font-bold text-sm block">All Tables & Seats</span><span className="text-gray-500 text-xs">Removes all players currently seated.</span></div>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white/5 rounded border border-red-900/30 transition-colors">
-                <input type="checkbox" className="w-5 h-5 rounded accent-red-600" checked={clearHistory} onChange={(e) => setClearHistory(e.target.checked)} />
-                <div><span className="text-red-400 font-bold text-sm block">History & Logs (New Day)</span><span className="text-red-300/70 text-xs">Wipes queue history, PML logs, and penalties.</span></div>
-              </label>
-            </div>
-            <div className="mb-6">
-               <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-1 block">Supervisor Password</label>
-               <input type="password" value={pass} onChange={e => { setPass(e.target.value); setError(''); }} className="w-full bg-black border border-gray-600 rounded p-2.5 text-white focus:border-red-500 outline-none" placeholder="Enter Admin Password" />
-               {error ? <p className="text-red-400 text-xs mt-1 font-bold">{error}</p> : null}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button onClick={onClose} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2.5 rounded transition">Cancel</button>
-              <button onClick={handleConfirm} className="flex-1 bg-red-700 hover:bg-red-600 text-white font-bold py-2.5 rounded transition">Execute Reset</button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    function AdminTableModal({ tables, updateTables, setDialog, onClose }) {
-      const [newTableId, setNewTableId] = useState('');
-
-      const handleAddTable = () => {
-        const id = newTableId.trim().toUpperCase();
-        if (!id) return;
-        if (tables.length >= 21) return setDialog({ type: 'alert', title: 'Limit Reached', message: 'Maximum of 21 tables allowed.', onConfirm: () => setDialog(null) });
-        if (tables.find(t => t.id === id)) return setDialog({ type: 'alert', title: 'Duplicate Table', message: `Table ${id} already exists.`, onConfirm: () => setDialog(null) });
-        
-        const newTable = { id, blindPrefix: '', isOpen: false, seats: Array(10).fill(null) };
-        updateTables([...tables, newTable]);
-        setNewTableId('');
-      };
-
-      const handleRemoveTable = (tableId) => {
-        const table = tables.find(t => t.id === tableId);
-        if (table.seats.some(s => s !== null)) {
-          return setDialog({ type: 'alert', title: 'Table Occupied', message: 'You must clear all seated players before removing this table.', onConfirm: () => setDialog(null) });
-        }
-        
-        const isDefault = ['E05-NL01', 'E05-NL02', 'E05-NL03', 'E05-NL04'].includes(tableId);
-        if (isDefault) {
-             setDialog({
-                 type: 'confirm',
-                 title: 'Hide Default Table?',
-                 message: `Warning: ${tableId} is a default floor table. Deleting it will permanently remove it from the dashboard until a system wipe.\n\nProceed?`,
-                 confirmStyle: 'danger',
-                 onConfirm: () => {
-                     updateTables(tables.filter(t => t.id !== tableId));
-                     setDialog(null);
-                 },
-                 onCancel: () => setDialog(null)
-             });
-        } else {
-             updateTables(tables.filter(t => t.id !== tableId));
-        }
-      };
-
-      const toggleTableOpen = (tId) => {
-        const t = tables.find(x => x.id === tId);
-        if (t.isOpen && t.seats.some(s => s !== null)) return setDialog({ type: 'alert', title: 'Table Occupied', message: 'You must clear all seated players before closing this table.', onConfirm: () => setDialog(null) });
-        updateTables(tables.map(x => x.id === tId ? { ...x, isOpen: !x.isOpen } : x));
-      };
-
-      const startEditingTable = (tId) => {
-        setDialog({
-            type: 'prompt',
-            title: 'Rename Table',
-            message: `Enter a new name for table ${tId}:`,
-            input: tId,
-            confirmText: 'Rename',
-            onConfirm: () => {
-                const newId = document.getElementById('dialog-input').value.trim().toUpperCase();
-                if (!newId) return;
-                if (newId !== tId && tables.find(t => t.id === newId)) {
-                    setDialog({ type: 'alert', title: 'Duplicate', message: 'A table with that name already exists.', onConfirm: () => setDialog(null) });
-                    return;
-                }
-                const newTables = tables.map(t => t.id === tId ? { ...t, id: newId } : t);
-                updateTables(newTables);
-                setDialog(null);
-            },
-            onCancel: () => setDialog(null)
-        });
-      };
-
-      return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1e293b] border border-[#475569] p-6 rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center mb-4 border-b border-gray-600 pb-2 shrink-0">
-               <h3 className="text-lg font-bold text-white">Manage Tables ({tables.length}/21)</h3>
-               <button onClick={onClose} className="text-gray-400 hover:text-white"><Icons.Close /></button>
-            </div>
-            
-            <div className="flex gap-2 mb-4 shrink-0">
-              <input type="text" value={newTableId} onChange={e => setNewTableId(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && handleAddTable()} placeholder="New Table ID (e.g. VIP-1)" className="flex-1 bg-black border border-gray-600 rounded p-2 text-white focus:border-[#D8B673] outline-none text-sm" />
-              <button onClick={handleAddTable} disabled={tables.length >= 21 || !newTableId.trim()} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold px-3 rounded transition shadow flex items-center gap-1 text-sm"><Icons.Plus /> Add</button>
-            </div>
-
-            <div className="space-y-2 mb-6 overflow-y-auto pr-2 custom-scrollbar flex-1">
-              {tables.map(t => (
-                <div key={t.id} className="flex justify-between items-center bg-[#0f172a] p-2 rounded border border-[#334155]">
-                  <div className="flex items-center gap-2">
-                     <span className={`text-sm font-bold ${t.isOpen ? 'text-white' : 'text-gray-500'}`}>{t.id}</span>
-                     <button onClick={() => startEditingTable(t.id)} className="text-gray-500 hover:text-blue-400 transition" title="Rename Table"><Icons.Edit /></button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                     <button onClick={() => toggleTableOpen(t.id)} className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded transition-colors w-16 ${t.isOpen ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400 border border-gray-600'}`}>{t.isOpen ? 'OPEN' : 'CLOSED'}</button>
-                     <button onClick={() => handleRemoveTable(t.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-900/30 rounded transition" title="Delete Table"><Icons.Trash /></button>
-                  </div>
-                </div>
-              ))}
-              {tables.length === 0 ? <p className="text-center text-gray-500 text-sm py-4 italic">No tables created.</p> : null}
-            </div>
-
-            <div className="shrink-0">
-               <button onClick={onClose} className="w-full bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition shadow">Done</button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     function PlayerMovementList({ data, tables, updateData, onBack, requestDelete, bulkDelete, onApplyPenalty, onCheckPenalty }) {
       const [filterBlind, setFilterBlind] = useState('All');
       const tableOptions = tables.map(t => t.id);
@@ -1364,6 +1003,947 @@
       );
     }
 
+    function QueueBoard({ queues, visibleBlinds, isWallDisplay = false }) {
+      const activeQueues = queues.filter(q => ['Confirmed', 'Next', 'Calling', "Time's Up", 'Arrived'].includes(q.status));
+
+      return (
+        <div className={`bg-black rounded-lg border border-gray-700 shadow-2xl relative w-full ${isWallDisplay ? 'h-full flex flex-col' : 'overflow-hidden'}`}>
+          <div className={`w-full custom-scrollbar ${isWallDisplay ? 'flex-1 overflow-hidden' : 'overflow-x-auto pb-2'}`}>
+            <table className={`w-full table-fixed min-w-[700px] sm:min-w-[1000px] border-collapse relative ${isWallDisplay ? 'h-full' : ''}`}>
+              <thead>
+                <tr>
+                  <th className={`sticky left-0 z-20 bg-black border-r border-b border-gray-700 p-2 text-center text-white font-bold shadow-[2px_0_4px_rgba(0,0,0,0.5)] ${isWallDisplay ? 'w-32 sm:w-48 text-xl sm:text-2xl h-[10%]' : 'w-20 sm:w-24 text-[10px] sm:text-sm'}`}>
+                    Blind<br/><span className="text-[#64D8D8]">Buy-in</span><br/><span className="text-red-500 mt-1 block">Total In Waiting List</span>
+                  </th>
+                  {visibleBlinds.map(b => {
+                    const count = activeQueues.filter(q => q.blindObj.prefix === b.prefix).length;
+                    return (
+                      <th key={b.prefix} className={`bg-black border-r border-b border-gray-700 p-2 text-center last:border-r-0 ${isWallDisplay ? 'h-[10%]' : ''}`}>
+                        <div className={`text-white font-bold whitespace-nowrap ${isWallDisplay ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-sm'}`}>{b.blind}</div>
+                        <div className={`text-[#64D8D8] font-bold whitespace-nowrap mt-1 ${isWallDisplay ? 'text-lg sm:text-xl' : 'text-[10px] sm:text-xs'}`}>{b.buyIn}</div>
+                        <div className={`text-red-500 font-bold whitespace-nowrap mt-1 ${isWallDisplay ? 'text-xl sm:text-2xl' : 'text-xs sm:text-sm'}`}>{count}</div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: MAX_ROWS }).map((_, rowIndex) => {
+                  const rowBg = rowIndex % 2 !== 0 ? 'bg-[#333333]' : 'bg-black';
+                  return (
+                    <tr key={rowIndex} className={`${rowBg} ${isWallDisplay ? 'h-[9%]' : ''}`}>
+                      <td className={`sticky left-0 z-10 border-r border-gray-700 p-2 sm:p-3 text-center text-[#64D8D8] font-bold border-b ${rowBg} shadow-[2px_0_4px_rgba(0,0,0,0.5)] ${isWallDisplay ? 'text-2xl sm:text-3xl' : 'text-xs sm:text-base'}`}>
+                        {rowIndex + 1}
+                      </td>
+                      {visibleBlinds.map(b => {
+                        const queue = activeQueues.filter(q => q.blindObj.prefix === b.prefix)[rowIndex];
+                        let cellClass = `p-2 sm:p-3 text-center border-r border-b border-gray-700 last:border-r-0 align-middle font-bold ${isWallDisplay ? 'text-3xl sm:text-4xl' : 'h-[45px] sm:h-[60px] text-sm sm:text-lg'} `;
+                        if (queue?.status === 'Calling') cellClass += "bg-[#E63946] text-black shadow-inner animate-pulse";
+                        else if (queue?.status === "Time's Up") cellClass += "bg-red-900 text-red-200 shadow-inner";
+                        else if (queue?.status === 'Arrived') cellClass += "bg-[#4ADE80] text-black shadow-inner"; 
+                        else if (queue) cellClass += "text-[#4ADE80]"; 
+                        else cellClass += "text-transparent";
+                        return <td key={b.prefix} className={cellClass}>{queue ? queue.id : ''}</td>;
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    function AdminBlindModal({ blindVis, updateBlindVis, autoBlindEnabled, updateAutoBlindEnabled, weeklyPresets, updateWeeklyPresets, onClose, now }) {
+      const [tab, setTab] = useState('live'); 
+      const [editDay, setEditDay] = useState(1); 
+      const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      
+      const td = new Date(now);
+      if (td.getHours() < 4) td.setDate(td.getDate() - 1);
+      const currentDayIdx = td.getDay();
+      const currentDayStr = daysOfWeek[currentDayIdx];
+
+      const applyTodayPreset = () => {
+         const preset = weeklyPresets[currentDayIdx];
+         const newVis = {};
+         BLINDS.forEach(b => newVis[b.prefix] = preset[b.prefix] !== false);
+         updateBlindVis(newVis);
+      };
+
+      return (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1e293b] border border-[#475569] rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="flex justify-between items-center p-4 border-b border-gray-600 bg-[#0f172a]">
+              <h3 className="text-lg font-bold text-[#D8B673]">Table Blind Visibility</h3>
+              <button onClick={onClose} className="text-gray-400 hover:text-white"><Icons.Close /></button>
+            </div>
+
+            <div className="flex bg-gray-800 text-xs sm:text-sm shrink-0">
+                <button onClick={() => setTab('live')} className={`flex-1 py-3 font-bold transition ${tab === 'live' ? 'bg-[#334155] text-white border-b-2 border-[#D8B673]' : 'text-gray-400 hover:text-gray-200'}`}>Live Settings</button>
+                <button onClick={() => setTab('preset')} className={`flex-1 py-3 font-bold transition ${tab === 'preset' ? 'bg-[#334155] text-white border-b-2 border-[#D8B673]' : 'text-gray-400 hover:text-gray-200'}`}>Advanced Presets</button>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar">
+                {tab === 'live' ? (
+                   <div className="space-y-4">
+                      <div className="bg-gray-800 p-3 rounded border border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                         <div>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Current Trading Day</p>
+                            <p className="text-white text-sm font-bold">{currentDayStr} <span className="text-gray-400 font-normal text-xs">(Resets 04:00 AM)</span></p>
+                         </div>
+                         <button onClick={applyTodayPreset} className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-1.5 px-3 rounded shadow transition w-full sm:w-auto shrink-0">
+                            Apply {currentDayStr} Preset
+                         </button>
+                      </div>
+                      <div className="space-y-3">
+                        <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1 border-b border-gray-700 pb-1">Live Board Visibility</p>
+                        {BLINDS.map(b => (
+                          <div key={b.prefix} className="flex justify-between items-center bg-black/40 p-2 rounded border border-gray-700/50">
+                            <span className="text-sm text-gray-200 font-bold">{b.blind} <span className="text-xs text-gray-500 font-normal ml-1">({b.buyIn})</span></span>
+                            <button onClick={() => updateBlindVis({...blindVis, [b.prefix]: !blindVis[b.prefix]})} className={`text-xs font-bold px-3 py-1 rounded-full border transition-colors w-20 ${blindVis[b.prefix] !== false ? 'bg-[#d8b46e] text-black border-[#c29e5a]' : 'bg-gray-800 text-gray-400 border-gray-600'}`}>
+                              {blindVis[b.prefix] !== false ? 'Showing' : 'Hidden'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                   </div>
+                ) : null}
+
+                {tab === 'preset' ? (
+                   <div className="space-y-4">
+                      <label className="flex items-center justify-between p-3 bg-gray-800 rounded border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition">
+                         <div className="pr-2">
+                            <span className="text-white text-sm font-bold block">Auto-Apply Daily Presets</span>
+                            <span className="text-gray-400 text-[10px] sm:text-xs mt-0.5 block leading-tight">Automatically applies the day's preset at 04:00 AM.</span>
+                         </div>
+                         <div className={`relative inline-flex h-6 w-11 items-center rounded-full shrink-0 transition-colors ${autoBlindEnabled ? 'bg-[#D8B673]' : 'bg-gray-600'}`}>
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoBlindEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                         </div>
+                         <input type="checkbox" className="hidden" checked={autoBlindEnabled} onChange={e => updateAutoBlindEnabled(e.target.checked)} />
+                      </label>
+                      <div className="pt-2">
+                         <label className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-2 block">Configure Weekly Schedule</label>
+                         <div className="flex flex-wrap gap-1.5 mb-4">
+                            {[1,2,3,4,5,6,0].map(dayIdx => (
+                               <button key={dayIdx} onClick={() => setEditDay(dayIdx)} className={`px-3 py-1.5 text-xs font-bold rounded-full transition border ${editDay === dayIdx ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200'}`}>
+                                  {daysOfWeek[dayIdx].substring(0,3)}
+                               </button>
+                            ))}
+                         </div>
+                         <div className="bg-black/40 p-3 rounded-lg border border-gray-700 space-y-3">
+                            <h4 className="text-sm text-[#D8B673] font-bold border-b border-gray-700 pb-2 mb-3">{daysOfWeek[editDay]} Preset</h4>
+                            {BLINDS.map(b => {
+                               const isVisible = weeklyPresets[editDay][b.prefix] !== false; 
+                               return (
+                                  <label key={b.prefix} className="flex items-center justify-between cursor-pointer group">
+                                     <span className="text-sm text-gray-200 font-bold group-hover:text-white transition">{b.blind} <span className="text-xs text-gray-500 font-normal">({b.buyIn})</span></span>
+                                     <input type="checkbox" className="w-4 h-4 rounded bg-gray-900 border-gray-600 accent-[#D8B673] cursor-pointer" checked={isVisible} onChange={(e) => {
+                                           const newPresets = {...weeklyPresets};
+                                           newPresets[editDay] = {...newPresets[editDay], [b.prefix]: e.target.checked};
+                                           updateWeeklyPresets(newPresets);
+                                       }} />
+                                  </label>
+                               );
+                            })}
+                         </div>
+                      </div>
+                   </div>
+                ) : null}
+            </div>
+
+            <div className="p-4 border-t border-gray-600 bg-[#0f172a] shrink-0">
+              <button onClick={onClose} className="w-full bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition">Done</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AdminFastRegisterModal({ visibleBlinds, onClose, onRegister, setDialog }) {
+      const [entries, setEntries] = useState([{ qNum: '', blindIdx: 0 }]);
+      const [nickName, setNickName] = useState('');
+      const [phone, setPhone] = useState('');
+      
+      const [activeCamera, setActiveCamera] = useState(false);
+      const [isProcessing, setIsProcessing] = useState(false);
+
+      const processCapturedImage = async (dataUrl) => {
+          setActiveCamera(false);
+          setIsProcessing(true);
+          try {
+              const result = await Tesseract.recognize(dataUrl, 'eng', {
+                  tessedit_char_whitelist: '0123456789ABCDEFabcdefXxOoIiLlZzSswWgG'
+              });
+              let text = result.data.text;
+              
+              const cleanText = (t) => t.replace(/\s+/g, '').toUpperCase().replace(/[O]/g, '0').replace(/[S]/g, '5').replace(/[LI]/g, '1').replace(/[Z]/g, '2');
+              
+              const phoneRegex = /[xX*]{3,}[^0-9oOsSlLiI\n]*([0-9oOsSlLiI]{4})/i;
+              const phoneMatch = text.match(phoneRegex);
+              const phoneLast4 = phoneMatch ? cleanText(phoneMatch[1]) : '';
+
+              if (phoneMatch) text = text.replace(phoneMatch[0], '');
+
+              const queueRegex = /([A-F][0-9oOsSlLiIzZ]{3,})/gi;
+              const queueMatches = text.match(queueRegex) || [];
+              const scannedQueues = [...new Set(queueMatches.map(cleanText))].slice(0, 3);
+              
+              if (scannedQueues.length > 0) {
+                  const newEntries = scannedQueues.map(qNum => {
+                      const prefix = qNum.charAt(0);
+                      const bIdx = visibleBlinds.findIndex(b => b.prefix === prefix);
+                      return { qNum, blindIdx: bIdx !== -1 ? bIdx : 0 };
+                  });
+                  setEntries(newEntries);
+              }
+              if (phoneLast4) {
+                  setPhone(phoneLast4);
+              }
+
+              if (scannedQueues.length === 0 && !phoneLast4) {
+                   setDialog({ type: 'alert', title: 'Scan Failed', message: 'Could not detect valid queue numbers or phone details from the ticket. Please try entering them manually.', onConfirm: () => setDialog(null) });
+              }
+          } catch (error) {
+              console.error("OCR Error:", error);
+              setDialog({ type: 'alert', title: 'Scan Error', message: 'An error occurred during text recognition. Please try again.', onConfirm: () => setDialog(null) });
+          } finally {
+              setIsProcessing(false);
+          }
+      };
+
+      const handleFileUpload = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (event) => processCapturedImage(event.target.result);
+          reader.readAsDataURL(file);
+          e.target.value = ''; // Reset input
+      };
+
+      const handleRegister = () => {
+        const validEntries = entries.filter(e => e.qNum.trim() !== '');
+        if (validEntries.length === 0 || phone.length < 4) return;
+        const mappedEntries = validEntries.map(e => ({ 
+            qNum: e.qNum, 
+            nickName: nickName.trim() || e.qNum.trim(), 
+            blindObj: visibleBlinds[e.blindIdx] 
+        }));
+        onRegister(mappedEntries, phone);
+      };
+
+      const handleQNumChange = (index, val) => {
+        const upperVal = val.toUpperCase().trim();
+        const newEntries = [...entries];
+        newEntries[index].qNum = upperVal;
+        if (upperVal.length >= 1) {
+          const prefix = upperVal.charAt(0);
+          const foundIdx = visibleBlinds.findIndex(b => b.prefix === prefix);
+          if (foundIdx !== -1) newEntries[index].blindIdx = foundIdx;
+        }
+        setEntries(newEntries);
+      };
+
+      const addEntry = () => { if (entries.length < 3) setEntries([...entries, { qNum: '', blindIdx: 0 }]); };
+      const removeEntry = (index) => setEntries(entries.filter((_, i) => i !== index));
+      const isFormValid = entries.some(e => e.qNum.trim() !== '') && phone.length >= 4;
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1e293b] border border-[#475569] p-5 sm:p-6 rounded-xl shadow-2xl max-w-sm w-full flex flex-col max-h-[90vh]">
+            
+            {activeCamera ? (
+               <CameraScanner 
+                  title="Scan Queue Ticket"
+                  type="ticket"
+                  onClose={() => setActiveCamera(false)}
+                  onCapture={processCapturedImage}
+               />
+            ) : null}
+
+            {isProcessing ? (
+               <div className="absolute inset-0 bg-black/80 z-[60] flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
+                  <div className="ai-spinner mb-4"></div>
+                  <p className="text-[#D8B673] font-bold tracking-widest text-sm uppercase text-center px-4 mt-2">
+                      Analyzing Text...<br/><span className="text-[10px] text-gray-400 normal-case tracking-normal">(Applying high-contrast filters)</span>
+                  </p>
+               </div>
+            ) : null}
+
+            <h3 className="text-lg font-bold text-white mb-4 border-b border-gray-600 pb-2 text-[#D8B673] shrink-0">⚡ Admin Fast Registration</h3>
+            <div className="overflow-y-auto custom-scrollbar pr-1 mb-4 space-y-4">
+              
+              <div className="flex items-stretch w-full shadow-lg rounded-lg overflow-hidden group">
+                  <button 
+                    onClick={() => setActiveCamera(true)} 
+                    className="flex-1 flex items-center justify-center gap-2 bg-indigo-900/60 hover:bg-indigo-800 border-y border-l border-indigo-700/50 text-indigo-300 py-3 transition font-bold text-[10px] sm:text-xs"
+                  >
+                      <Icons.Camera /> Scan Queue Ticket
+                  </button>
+                  <div className="relative flex items-stretch">
+                     <button onClick={(e) => { e.currentTarget.nextElementSibling.classList.toggle('hidden'); }} className="bg-indigo-900/40 hover:bg-indigo-800 border-y border-r border-indigo-700/50 px-3 text-indigo-300 transition">
+                         <Icons.ChevronDown />
+                     </button>
+                     <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded shadow-xl hidden z-50 overflow-hidden">
+                         <input type="file" id="admin-upload-ticket" accept="image/*" className="hidden" onChange={(e) => { handleFileUpload(e); e.target.parentElement.classList.add('hidden'); }} />
+                         <button onClick={(e) => document.getElementById('admin-upload-ticket').click()} className="w-full flex items-center justify-start gap-2 px-4 py-3 hover:bg-gray-700 text-gray-200 text-xs font-bold transition">
+                             <Icons.Upload /> Upload Photo Instead
+                         </button>
+                     </div>
+                  </div>
+              </div>
+
+              <div className="space-y-4">
+                  {entries.map((entry, index) => (
+                    <div key={index} className="p-3 bg-black/40 border border-gray-700 rounded-lg relative space-y-3">
+                      {index > 0 ? <button onClick={() => removeEntry(index)} className="absolute top-2 right-2 text-red-500 text-xs font-bold hover:text-red-400 bg-red-900/20 px-2 py-1 rounded">Remove</button> : null}
+                      <div>
+                        <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Queue {index + 1}</label>
+                        <input type="text" value={entry.qNum} onChange={e => handleQNumChange(index, e.target.value)} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white uppercase focus:border-[#D8B673] outline-none" placeholder="e.g. A001" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Select Blind</label>
+                        <select value={entry.blindIdx} onChange={e => { const n = [...entries]; n[index].blindIdx = Number(e.target.value); setEntries(n); }} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none">
+                          {visibleBlinds.map((b, i) => <option key={b.prefix} value={i}>{b.prefix} - {b.blind} ({b.buyIn})</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                  {entries.length < 3 ? <button onClick={addEntry} className="w-full py-2 border border-dashed border-gray-600 text-gray-400 rounded-lg hover:bg-gray-800 hover:text-white transition text-xs font-bold">+ Add Another Blinds</button> : null}
+              </div>
+              <div className="pt-2 border-t border-gray-700 space-y-3">
+                <div>
+                  <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Nick Name (Applies to all)</label>
+                  <input type="text" value={nickName} onChange={e => setNickName(e.target.value)} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none" placeholder="(Optional) Defaults to Queue" />
+                </div>
+                <div>
+                  <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Membership / Mobile Number Last 4 Digits</label>
+                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))} className="w-full bg-black border border-gray-600 rounded p-2 sm:p-2.5 text-white focus:border-[#D8B673] outline-none" placeholder="e.g. 4263" />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={onClose} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2.5 rounded transition">Cancel</button>
+              <button onClick={handleRegister} disabled={!isFormValid} className="flex-1 bg-[#d8b46e] disabled:opacity-50 hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition">Register</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AdminResetModal({ onClose, onReset }) {
+      const [clearQueues, setClearQueues] = useState(true);
+      const [clearSeats, setClearSeats] = useState(false);
+      const [clearHistory, setClearHistory] = useState(false);
+      const [pass, setPass] = useState('');
+      const [error, setError] = useState('');
+
+      const handleConfirm = () => {
+        if (pass !== ADMIN_PASSWORD) return setError('Invalid Supervisor Password');
+        if (!clearQueues && !clearSeats && !clearHistory) return setError('Please select at least one option to reset.');
+        onReset({ clearQueues, clearSeats, clearHistory });
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1e293b] border border-red-900/50 p-5 sm:p-6 rounded-xl shadow-2xl max-w-sm w-full flex flex-col">
+            <h3 className="text-lg font-bold text-red-400 mb-4 border-b border-gray-600 pb-2 shrink-0">⚠️ Advanced Reset</h3>
+            <div className="space-y-3 mb-6">
+              <p className="text-sm text-gray-300 mb-2">Select the data you wish to clear:</p>
+              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white/5 rounded border border-[#334155] transition-colors">
+                <input type="checkbox" className="w-5 h-5 rounded" checked={clearQueues} onChange={(e) => setClearQueues(e.target.checked)} />
+                <div><span className="text-gray-200 font-bold text-sm block">Active Queue List</span><span className="text-gray-500 text-xs">Clears all waiting/called queues.</span></div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white/5 rounded border border-[#334155] transition-colors">
+                <input type="checkbox" className="w-5 h-5 rounded" checked={clearSeats} onChange={(e) => setClearSeats(e.target.checked)} />
+                <div><span className="text-gray-200 font-bold text-sm block">All Tables & Seats</span><span className="text-gray-500 text-xs">Removes all players currently seated.</span></div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white/5 rounded border border-red-900/30 transition-colors">
+                <input type="checkbox" className="w-5 h-5 rounded accent-red-600" checked={clearHistory} onChange={(e) => setClearHistory(e.target.checked)} />
+                <div><span className="text-red-400 font-bold text-sm block">History & Logs (New Day)</span><span className="text-red-300/70 text-xs">Wipes queue history, PML logs, and penalties.</span></div>
+              </label>
+            </div>
+            <div className="mb-6">
+               <label className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-1 block">Supervisor Password</label>
+               <input type="password" value={pass} onChange={e => { setPass(e.target.value); setError(''); }} className="w-full bg-black border border-gray-600 rounded p-2.5 text-white focus:border-red-500 outline-none" placeholder="Enter Admin Password" />
+               {error ? <p className="text-red-400 text-xs mt-1 font-bold">{error}</p> : null}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={onClose} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2.5 rounded transition">Cancel</button>
+              <button onClick={handleConfirm} className="flex-1 bg-red-700 hover:bg-red-600 text-white font-bold py-2.5 rounded transition">Execute Reset</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AdminTableModal({ tables, updateTables, setDialog, onClose }) {
+      const [newTableId, setNewTableId] = useState('');
+
+      const handleAddTable = () => {
+        const id = newTableId.trim().toUpperCase();
+        if (!id) return;
+        if (tables.length >= 21) return setDialog({ type: 'alert', title: 'Limit Reached', message: 'Maximum of 21 tables allowed.', onConfirm: () => setDialog(null) });
+        if (tables.find(t => t.id === id)) return setDialog({ type: 'alert', title: 'Duplicate Table', message: `Table ${id} already exists.`, onConfirm: () => setDialog(null) });
+        
+        const newTable = { id, blindPrefix: '', isOpen: false, seats: Array(10).fill(null) };
+        updateTables([...tables, newTable]);
+        setNewTableId('');
+      };
+
+      const handleRemoveTable = (tableId) => {
+        const table = tables.find(t => t.id === tableId);
+        if (table.seats.some(s => s !== null)) {
+          return setDialog({ type: 'alert', title: 'Table Occupied', message: 'You must clear all seated players before removing this table.', onConfirm: () => setDialog(null) });
+        }
+        
+        const isDefault = ['E05-NL01', 'E05-NL02', 'E05-NL03', 'E05-NL04'].includes(tableId);
+        if (isDefault) {
+             setDialog({
+                 type: 'confirm',
+                 title: 'Hide Default Table?',
+                 message: `Warning: ${tableId} is a default floor table. Deleting it will permanently remove it from the dashboard until a system wipe.\n\nProceed?`,
+                 confirmStyle: 'danger',
+                 onConfirm: () => {
+                     updateTables(tables.filter(t => t.id !== tableId));
+                     setDialog(null);
+                 },
+                 onCancel: () => setDialog(null)
+             });
+        } else {
+             updateTables(tables.filter(t => t.id !== tableId));
+        }
+      };
+
+      const toggleTableOpen = (tId) => {
+        const t = tables.find(x => x.id === tId);
+        if (t.isOpen && t.seats.some(s => s !== null)) return setDialog({ type: 'alert', title: 'Table Occupied', message: 'You must clear all seated players before closing this table.', onConfirm: () => setDialog(null) });
+        updateTables(tables.map(x => x.id === tId ? { ...x, isOpen: !x.isOpen } : x));
+      };
+
+      const startEditingTable = (tId) => {
+        setDialog({
+            type: 'prompt',
+            title: 'Rename Table',
+            message: `Enter a new name for table ${tId}:`,
+            input: tId,
+            confirmText: 'Rename',
+            onConfirm: () => {
+                const newId = document.getElementById('dialog-input').value.trim().toUpperCase();
+                if (!newId) return;
+                if (newId !== tId && tables.find(t => t.id === newId)) {
+                    setDialog({ type: 'alert', title: 'Duplicate', message: 'A table with that name already exists.', onConfirm: () => setDialog(null) });
+                    return;
+                }
+                const newTables = tables.map(t => t.id === tId ? { ...t, id: newId } : t);
+                updateTables(newTables);
+                setDialog(null);
+            },
+            onCancel: () => setDialog(null)
+        });
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1e293b] border border-[#475569] p-6 rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-600 pb-2 shrink-0">
+               <h3 className="text-lg font-bold text-white">Manage Tables ({tables.length}/21)</h3>
+               <button onClick={onClose} className="text-gray-400 hover:text-white"><Icons.Close /></button>
+            </div>
+            
+            <div className="flex gap-2 mb-4 shrink-0">
+              <input type="text" value={newTableId} onChange={e => setNewTableId(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && handleAddTable()} placeholder="New Table ID (e.g. VIP-1)" className="flex-1 bg-black border border-gray-600 rounded p-2 text-white focus:border-[#D8B673] outline-none text-sm" />
+              <button onClick={handleAddTable} disabled={tables.length >= 21 || !newTableId.trim()} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold px-3 rounded transition shadow flex items-center gap-1 text-sm"><Icons.Plus /> Add</button>
+            </div>
+
+            <div className="space-y-2 mb-6 overflow-y-auto pr-2 custom-scrollbar flex-1">
+              {tables.map(t => (
+                <div key={t.id} className="flex justify-between items-center bg-[#0f172a] p-2 rounded border border-[#334155]">
+                  <div className="flex items-center gap-2">
+                     <span className={`text-sm font-bold ${t.isOpen ? 'text-white' : 'text-gray-500'}`}>{t.id}</span>
+                     <button onClick={() => startEditingTable(t.id)} className="text-gray-500 hover:text-blue-400 transition" title="Rename Table"><Icons.Edit /></button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                     <button onClick={() => toggleTableOpen(t.id)} className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded transition-colors w-16 ${t.isOpen ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400 border border-gray-600'}`}>{t.isOpen ? 'OPEN' : 'CLOSED'}</button>
+                     <button onClick={() => handleRemoveTable(t.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-900/30 rounded transition" title="Delete Table"><Icons.Trash /></button>
+                  </div>
+                </div>
+              ))}
+              {tables.length === 0 ? <p className="text-center text-gray-500 text-sm py-4 italic">No tables created.</p> : null}
+            </div>
+
+            <div className="shrink-0">
+               <button onClick={onClose} className="w-full bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition shadow">Done</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- TOURNAMENT CONFIG MODAL ---
+    function TournamentConfigModal({ state, activeEvent, updateState, onClose }) {
+        const [eventName, setEventName] = useState(state.customEvent?.name || activeEvent?.name || '');
+        const [prizePoolOverride, setPrizePoolOverride] = useState(state.customPrizePool || '');
+        const [startChips, setStartChips] = useState(state.customEvent?.startingChips || activeEvent?.startingChips || 0);
+        
+        const currentLvl = state.blindStructure?.[state.currentLevelIndex || 0] || TOURNAMENT_BLIND_STRUCTURE[state.currentLevelIndex || 0] || {};
+        
+        const [isBreak, setIsBreak] = useState(!!currentLvl.isBreak);
+        const [duration, setDuration] = useState(currentLvl.duration || activeEvent?.blindDuration || 10);
+        const [sb, setSb] = useState(currentLvl.sb || 0);
+        const [bb, setBb] = useState(currentLvl.bb || 0);
+        const [ante, setAnte] = useState(currentLvl.ante || 0);
+        const [levelLabel, setLevelLabel] = useState(currentLvl.label || '');
+        const [resetClock, setResetClock] = useState(false);
+
+        const handleSave = () => {
+            const newCustomEvent = {
+                ...(state.customEvent || activeEvent),
+                name: eventName,
+                startingChips: parseInt(startChips) || 0
+            };
+            
+            const newBlindStructure = state.blindStructure ? [...state.blindStructure] : JSON.parse(JSON.stringify(TOURNAMENT_BLIND_STRUCTURE));
+            
+            newBlindStructure[state.currentLevelIndex || 0] = {
+                ...newBlindStructure[state.currentLevelIndex || 0],
+                isBreak,
+                duration: parseInt(duration) || 10,
+                sb: parseInt(sb) || 0,
+                bb: parseInt(bb) || 0,
+                ante: parseInt(ante) || 0,
+                label: levelLabel || `Level ${currentLvl.level || (state.currentLevelIndex + 1)}`
+            };
+
+            const updates = {
+                customEvent: newCustomEvent,
+                customPrizePool: parseInt(prizePoolOverride) || null,
+                blindStructure: newBlindStructure
+            };
+
+            if (resetClock) {
+                updates.levelStartTime = Date.now();
+                updates.pausedAt = Date.now();
+                updates.isRunning = false;
+            }
+
+            updateState(updates);
+            onClose();
+        };
+
+        return (
+            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+                <div className="bg-[#111] border border-[#D8B673] rounded-xl shadow-[0_0_30px_rgba(216,182,115,0.2)] max-w-2xl w-full flex flex-col max-h-[90vh] overflow-hidden">
+                    <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
+                        <h2 className="text-xl font-black text-[#D8B673] flex items-center gap-2"><Icons.Settings /> Tournament Configuration</h2>
+                        <button onClick={onClose} className="text-gray-400 hover:text-white"><Icons.Close /></button>
+                    </div>
+
+                    <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                        {/* Event Override Section */}
+                        <div className="bg-black/50 p-4 rounded-lg border border-gray-800">
+                            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 border-b border-gray-800 pb-2">Event Details Override</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs text-gray-500 font-bold mb-1">Event Name Display</label>
+                                    <input type="text" value={eventName} onChange={e => setEventName(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673]" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 font-bold mb-1">Manual Prize Pool ($)</label>
+                                    <input type="number" value={prizePoolOverride} onChange={e => setPrizePoolOverride(e.target.value)} placeholder="Auto-calculated if empty" className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 font-bold mb-1">Starting Chips</label>
+                                    <input type="number" value={startChips} onChange={e => setStartChips(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Current Level Edit Section */}
+                        <div className="bg-black/50 p-4 rounded-lg border border-gray-800">
+                            <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-2">
+                                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Current Level Override</h3>
+                                <label className="flex items-center gap-2 cursor-pointer text-yellow-500 font-bold text-xs bg-yellow-900/20 px-2 py-1 rounded border border-yellow-700/50">
+                                    <input type="checkbox" checked={isBreak} onChange={e => setIsBreak(e.target.checked)} className="w-4 h-4 accent-yellow-500" />
+                                    IS BREAK MODE
+                                </label>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                                <div className="col-span-2">
+                                    <label className="block text-xs text-gray-500 font-bold mb-1">Level / Break Label</label>
+                                    <input type="text" value={levelLabel} onChange={e => setLevelLabel(e.target.value)} placeholder={isBreak ? "e.g. Dinner Break" : "e.g. Level 1"} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673]" />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-xs text-gray-500 font-bold mb-1">Duration (Minutes)</label>
+                                    <input type="number" value={duration} onChange={e => setDuration(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
+                                </div>
+                                {!isBreak && (
+                                    <>
+                                        <div>
+                                            <label className="block text-xs text-gray-500 font-bold mb-1">Small Blind</label>
+                                            <input type="number" value={sb} onChange={e => setSb(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-gray-500 font-bold mb-1">Big Blind</label>
+                                            <input type="number" value={bb} onChange={e => setBb(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <label className="block text-xs text-gray-500 font-bold mb-1">Ante</label>
+                                            <input type="number" value={ante} onChange={e => setAnte(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                            <label className="flex items-center gap-2 cursor-pointer text-gray-300 text-sm mt-4 bg-gray-800 p-2 rounded">
+                                <input type="checkbox" checked={resetClock} onChange={e => setResetClock(e.target.checked)} className="w-4 h-4 accent-[#D8B673]" />
+                                Reset timer to full duration upon saving
+                            </label>
+                        </div>
+                    </div>
+
+                    <div className="p-4 border-t border-gray-800 bg-gray-900 flex justify-end gap-3 shrink-0">
+                        <button onClick={onClose} className="px-6 py-2 rounded font-bold text-gray-400 bg-gray-800 hover:bg-gray-700 transition border border-gray-700">Cancel</button>
+                        <button onClick={handleSave} className="px-8 py-2 rounded font-bold text-black bg-[#D8B673] hover:bg-[#c29e5a] transition shadow-lg">Save & Apply</button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // --- TOURNAMENT COMPONENT ---
+    function TournamentClock({ activeEvent, state, updateState, setDialog }) {
+        const [timeRemaining, setTimeRemaining] = useState(0);
+        const [configOpen, setConfigOpen] = useState(false);
+        const timerRef = useRef(null);
+
+        // Local state for smooth typing in admin inputs
+        const [inputEntries, setInputEntries] = useState(state.entries?.toString() || '0');
+        const [inputRemaining, setInputRemaining] = useState(state.playersRemaining?.toString() || '0');
+
+        useEffect(() => { setInputEntries(state.entries?.toString() || '0'); }, [state.entries]);
+        useEffect(() => { setInputRemaining(state.playersRemaining?.toString() || '0'); }, [state.playersRemaining]);
+
+        const currentStructure = state.blindStructure?.[state.currentLevelIndex || 0] || TOURNAMENT_BLIND_STRUCTURE[state.currentLevelIndex || 0] || {};
+        const nextStructure = state.blindStructure?.[(state.currentLevelIndex || 0) + 1] || TOURNAMENT_BLIND_STRUCTURE[(state.currentLevelIndex || 0) + 1] || {};
+        const displayEvent = state.customEvent || activeEvent;
+        
+        // Extract primitive value for stable useEffect dependencies
+        const durationMins = currentStructure.duration || displayEvent?.blindDuration || 10;
+
+        useEffect(() => {
+            const durationSecs = durationMins * 60;
+
+            if (state.isRunning) {
+                timerRef.current = setInterval(() => {
+                    const now = Date.now();
+                    const start = state.levelStartTime || now;
+                    const elapsed = Math.floor((now - start) / 1000);
+                    const remaining = Math.max(0, durationSecs - elapsed);
+                    
+                    setTimeRemaining(remaining);
+
+                    if (remaining === 0) {
+                        // Keep it at 0 when time expires
+                    }
+                }, 1000);
+            } else {
+                const now = Date.now();
+                const start = state.levelStartTime || now;
+                const paused = state.pausedAt || now;
+                const elapsed = Math.floor((paused - start) / 1000);
+                setTimeRemaining(Math.max(0, durationSecs - elapsed));
+            }
+
+            return () => clearInterval(timerRef.current);
+        }, [state.isRunning, state.levelStartTime, state.pausedAt, state.currentLevelIndex, durationMins]);
+
+        const formatTime = (secs) => {
+            const m = Math.floor(secs / 60);
+            const s = secs % 60;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        };
+
+        const toggleTimer = () => {
+            const now = Date.now();
+            if (state.isRunning) {
+                updateState({ isRunning: false, pausedAt: now });
+            } else {
+                const pauseDuration = now - (state.pausedAt || now);
+                updateState({ 
+                    isRunning: true, 
+                    levelStartTime: (state.levelStartTime || now) + pauseDuration,
+                    pausedAt: null
+                });
+            }
+        };
+
+        const changeLevel = (direction) => {
+            const newIndex = (state.currentLevelIndex || 0) + direction;
+            const structToUse = state.blindStructure || TOURNAMENT_BLIND_STRUCTURE;
+            if (newIndex >= 0 && newIndex < structToUse.length) {
+                updateState({
+                    currentLevelIndex: newIndex,
+                    levelStartTime: Date.now(),
+                    isRunning: false,
+                    pausedAt: Date.now()
+                });
+            }
+        };
+        
+        const adjustTimePrompt = () => {
+            if (!setDialog) return;
+            setDialog({
+                type: 'prompt',
+                title: 'Adjust Clock',
+                message: 'Enter new time remaining in minutes (e.g., 15):',
+                input: Math.floor(timeRemaining / 60).toString(),
+                confirmText: 'Update Time',
+                onConfirm: () => {
+                    const val = parseInt(document.getElementById('dialog-input').value);
+                    if (!isNaN(val) && val >= 0) {
+                        const newRemainingSecs = val * 60;
+                        const durationSecs = durationMins * 60;
+                        const newElapsedSecs = durationSecs - newRemainingSecs;
+                        
+                        const now = Date.now();
+                        const newStartTime = now - (newElapsedSecs * 1000);
+                        
+                        updateState({
+                            levelStartTime: newStartTime,
+                            pausedAt: state.isRunning ? null : now
+                        });
+                    }
+                    setDialog(null);
+                },
+                onCancel: () => setDialog(null)
+            });
+        };
+
+        const calcPrizePool = () => {
+            if (state.customPrizePool) return state.customPrizePool;
+            const entriesCount = state.entries || 0;
+            if (displayEvent?.isMainEvent) {
+                return Math.max(480000, entriesCount * 1500);
+            }
+            if (displayEvent?.isBounty) {
+                return entriesCount * 700; // $300 goes to bounty
+            }
+            return entriesCount * (displayEvent?.buyIn || 0);
+        };
+
+        const avgStack = (state.entries > 0 && state.playersRemaining > 0)
+            ? Math.floor(((state.entries || 0) * (displayEvent?.startingChips || 0)) / state.playersRemaining) 
+            : 0;
+
+        if (!displayEvent) return null;
+
+        return (
+            <div className="flex-1 flex flex-col bg-[#111] border border-gray-800 rounded-xl overflow-hidden relative shadow-2xl h-full">
+                {configOpen && <TournamentConfigModal state={state} activeEvent={activeEvent} updateState={updateState} onClose={() => setConfigOpen(false)} />}
+                
+                {/* Background Graphics */}
+                <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] pointer-events-none"></div>
+                
+                {/* Header */}
+                <div className="bg-red-900/80 border-b-4 border-red-600 p-4 text-center z-10 flex flex-col md:flex-row justify-between items-center gap-2">
+                    <div className="text-xl sm:text-2xl font-black text-[#D8B673] uppercase tracking-widest drop-shadow-md whitespace-nowrap">
+                        Resorts Poker Championship
+                    </div>
+                    <h1 className="text-xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-widest drop-shadow-md">
+                        {displayEvent.name}
+                    </h1>
+                    <div className="text-center md:text-right">
+                        <div className="text-red-200 text-xs font-bold uppercase">Tournament Mode</div>
+                        <div className="text-white font-bold">{new Date().toLocaleTimeString()}</div>
+                    </div>
+                </div>
+
+                {/* Main Content Area */}
+                <div className="flex-1 flex flex-col sm:flex-row p-6 gap-6 z-10">
+                    
+                    {/* Left Panel: Stats */}
+                    <div className="w-full sm:w-1/3 flex flex-col gap-4">
+                        <div className="bg-gray-900 border border-gray-700 p-4 rounded-lg shadow-inner text-center">
+                            <div className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-1">Prize Pool</div>
+                            <div className="text-4xl font-black text-[#D8B673]">
+                                ${calcPrizePool().toLocaleString()}
+                            </div>
+                            {activeEvent.isMainEvent && (state.entries || 0) < 320 && (
+                                <div className="text-xs text-red-400 mt-1">Guaranteed at $480,000</div>
+                            )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-gray-900 border border-gray-700 p-4 rounded-lg shadow-inner text-center">
+                                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">Entries</div>
+                                <div className="text-3xl font-black text-white">{state.entries || 0}</div>
+                            </div>
+                            <div className="bg-gray-900 border border-gray-700 p-4 rounded-lg shadow-inner text-center">
+                                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">Remaining</div>
+                                <div className="text-3xl font-black text-white">{state.playersRemaining || 0}</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-900 border border-gray-700 p-4 rounded-lg shadow-inner text-center">
+                            <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">Avg Stack</div>
+                            <div className="text-3xl font-black text-blue-400">{avgStack.toLocaleString()}</div>
+                        </div>
+
+                        {displayEvent.isBounty && (
+                            <div className="bg-green-900/30 border border-green-700 p-4 rounded-lg text-center mt-auto">
+                                <div className="text-green-400 text-sm font-bold uppercase tracking-wider">Bounty Value</div>
+                                <div className="text-2xl font-black text-green-300">$300 / Player</div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right Panel: Clock & Blinds */}
+                    <div className="w-full sm:w-2/3 flex flex-col justify-center items-center bg-gray-900 border border-gray-700 rounded-lg p-8 relative">
+                        
+                        {currentStructure.isBreak ? (
+                            <div className="text-center w-full">
+                                <h2 className="text-4xl sm:text-6xl font-black text-yellow-500 mb-6 uppercase tracking-widest animate-pulse">
+                                    {currentStructure.label || "Break"}
+                                </h2>
+                                <div 
+                                    className={`text-[100px] sm:text-[150px] leading-none font-black font-mono tracking-tighter cursor-pointer hover:opacity-80 transition ${state.isRunning ? 'text-white' : 'text-red-500'}`}
+                                    onClick={setDialog ? adjustTimePrompt : undefined}
+                                    title="Click to edit time"
+                                >
+                                    {formatTime(timeRemaining)}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center w-full">
+                                <div className="flex justify-between items-end w-full border-b border-gray-700 pb-2 mb-6 px-4">
+                                    <div className="text-left">
+                                        <div className="text-gray-400 text-lg font-bold uppercase tracking-widest">Level</div>
+                                        <div className="text-4xl font-black text-white">{currentStructure.label || currentStructure.level || (state.currentLevelIndex + 1)}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-gray-400 text-sm font-bold uppercase tracking-widest">Ante</div>
+                                        <div className="text-3xl font-black text-purple-400">{currentStructure.ante?.toLocaleString() || 0}</div>
+                                    </div>
+                                </div>
+
+                                <div 
+                                    className={`text-[100px] sm:text-[180px] leading-none font-black font-mono tracking-tighter drop-shadow-2xl mb-6 cursor-pointer hover:opacity-80 transition ${state.isRunning ? 'text-white' : 'text-red-500'}`}
+                                    onClick={setDialog ? adjustTimePrompt : undefined}
+                                    title="Click to edit time"
+                                >
+                                    {formatTime(timeRemaining)}
+                                </div>
+
+                                <div className="bg-black/50 p-6 rounded-xl border border-gray-800 w-full inline-block">
+                                    <div className="text-gray-400 text-xl font-bold uppercase tracking-widest mb-2">Blinds</div>
+                                    <div className="text-5xl sm:text-7xl font-black text-[#D8B673]">
+                                        {currentStructure.sb?.toLocaleString() || 0} / {currentStructure.bb?.toLocaleString() || 0}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Next Level Preview */}
+                        {nextStructure && (
+                            <div className="absolute bottom-4 left-4 right-4 flex justify-between text-gray-500 text-sm font-bold uppercase tracking-wider">
+                                <span>Next: {nextStructure.isBreak ? (nextStructure.label || 'Break') : (nextStructure.label || `Level ${nextStructure.level || state.currentLevelIndex + 2}`)}</span>
+                                <span>
+                                    {nextStructure.isBreak 
+                                        ? `${nextStructure.duration} Mins` 
+                                        : `${nextStructure.sb?.toLocaleString() || 0} / ${nextStructure.bb?.toLocaleString() || 0} / ${nextStructure.ante?.toLocaleString() || 0}`
+                                    }
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Admin Controls (Hidden on Wall Display) */}
+                {setDialog && (
+                    <div className="bg-gray-900 border-t border-gray-700 p-4 flex justify-between items-center z-10 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+                        <div className="flex gap-2">
+                            <button onClick={() => changeLevel(-1)} className="bg-gray-800 hover:bg-gray-700 p-3 rounded text-white shadow" title="Previous Level"><Icons.ChevronDown /></button>
+                            <button onClick={() => changeLevel(1)} className="bg-gray-800 hover:bg-gray-700 p-3 rounded text-white shadow" title="Next Level"><Icons.ChevronUp /></button>
+                        </div>
+                        
+                        <div className="flex items-center gap-4">
+                            <button 
+                                onClick={toggleTimer} 
+                                className={`px-12 py-4 rounded-full font-black text-2xl tracking-widest uppercase shadow-[0_0_20px_rgba(0,0,0,0.5)] transition-all active:scale-95 flex items-center gap-3 border-4 ${state.isRunning ? 'bg-red-700 hover:bg-red-600 text-white border-red-500' : 'bg-green-600 hover:bg-green-500 text-white border-green-400 primary-action-glow'}`}
+                            >
+                                {state.isRunning ? <><Icons.Pause /> Pause Clock</> : <><Icons.Play /> Start Clock</>}
+                            </button>
+                            
+                            <div className="flex flex-col gap-2">
+                                <button onClick={() => setConfigOpen(true)} className="bg-blue-800 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider px-4 py-2 rounded shadow flex items-center gap-1">
+                                    <Icons.Settings /> Setup & Config
+                                </button>
+                                <button onClick={() => updateState({ levelStartTime: Date.now(), pausedAt: Date.now(), isRunning: false })} className="text-gray-400 hover:text-white text-[10px] font-bold uppercase underline">
+                                    Reset Level Timer
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-6">
+                            <div className="flex flex-col items-center">
+                                <span className="text-[10px] text-gray-400 font-bold uppercase mb-1">Entries</span>
+                                <div className="flex gap-1 items-stretch h-8">
+                                    <button onClick={() => updateState({ entries: Math.max(0, (state.entries || 0) - 1) })} className="bg-gray-800 px-3 rounded text-white font-bold hover:bg-gray-700 leading-none">-</button>
+                                    <input 
+                                        type="number" 
+                                        className="w-16 bg-black border border-gray-600 text-center text-white font-bold rounded outline-none focus:border-[#D8B673] no-spinners"
+                                        value={inputEntries}
+                                        onChange={(e) => setInputEntries(e.target.value)}
+                                        onBlur={() => {
+                                            const val = parseInt(inputEntries);
+                                            updateState({ entries: isNaN(val) ? 0 : Math.max(0, val) });
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if(e.key === 'Enter') {
+                                                const val = parseInt(inputEntries);
+                                                updateState({ entries: isNaN(val) ? 0 : Math.max(0, val) });
+                                                e.target.blur();
+                                            }
+                                        }}
+                                    />
+                                    <button onClick={() => updateState({ entries: (state.entries || 0) + 1 })} className="bg-gray-800 px-3 rounded text-white font-bold hover:bg-gray-700 leading-none">+</button>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <span className="text-[10px] text-gray-400 font-bold uppercase mb-1">Remaining</span>
+                                <div className="flex gap-1 items-stretch h-8">
+                                    <button onClick={() => updateState({ playersRemaining: Math.max(0, (state.playersRemaining || 0) - 1) })} className="bg-gray-800 px-3 rounded text-white font-bold hover:bg-gray-700 leading-none">-</button>
+                                    <input 
+                                        type="number" 
+                                        className="w-16 bg-black border border-gray-600 text-center text-white font-bold rounded outline-none focus:border-[#D8B673] no-spinners"
+                                        value={inputRemaining}
+                                        onChange={(e) => setInputRemaining(e.target.value)}
+                                        onBlur={() => {
+                                            const val = parseInt(inputRemaining);
+                                            updateState({ playersRemaining: isNaN(val) ? 0 : Math.max(0, val) });
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if(e.key === 'Enter') {
+                                                const val = parseInt(inputRemaining);
+                                                updateState({ playersRemaining: isNaN(val) ? 0 : Math.max(0, val) });
+                                                e.target.blur();
+                                            }
+                                        }}
+                                    />
+                                    <button onClick={() => updateState({ playersRemaining: (state.playersRemaining || 0) + 1 })} className="bg-gray-800 px-3 rounded text-white font-bold hover:bg-gray-700 leading-none">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // --- APP COMPONENT ---
+
     function App() {
       const [view, setView] = useState(() => {
         const params = new URLSearchParams(window.location.search);
@@ -1387,6 +1967,21 @@
       const [requireConfirm, setRequireConfirm] = useState(false);
       const [requireMemberInfo, setRequireMemberInfo] = useState(false);
       const [adminLock, setAdminLock] = useState({ isLocked: false, lockedBy: '' });
+
+      // --- NEW APP STATE: SYSTEM MODE ---
+      const [systemMode, setSystemMode] = useState('cash'); // 'cash' or 'tournament'
+      const [activeTournamentEventId, setActiveTournamentEventId] = useState(null);
+      const [tournamentState, setTournamentState] = useState({
+          currentLevelIndex: 0,
+          isRunning: false,
+          levelStartTime: Date.now(),
+          pausedAt: Date.now(),
+          entries: 0,
+          playersRemaining: 0,
+          blindStructure: null,
+          customEvent: null,
+          customPrizePool: null
+      });
 
       const [adminLayoutMode, setAdminLayoutMode] = useState('both'); 
       const [isAdminControlsExpanded, setIsAdminControlsExpanded] = useState(false); 
@@ -1415,7 +2010,8 @@
         queues: [], history: [], pmlData: [], pmlHistory: [], tables: [],
         blindVis: {}, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS,
         autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false,
-        adminLock: { isLocked: false, lockedBy: '' }
+        adminLock: { isLocked: false, lockedBy: '' },
+        systemMode: 'cash', activeTournamentEventId: null, tournamentState: {}
       });
 
       const updateCloudState = async (updates) => {
@@ -1443,6 +2039,9 @@
         if (cleanUpdates.requireConfirm !== undefined) setRequireConfirm(cleanUpdates.requireConfirm);
         if (cleanUpdates.requireMemberInfo !== undefined) setRequireMemberInfo(cleanUpdates.requireMemberInfo);
         if (cleanUpdates.adminLock !== undefined) setAdminLock(cleanUpdates.adminLock);
+        if (cleanUpdates.systemMode !== undefined) setSystemMode(cleanUpdates.systemMode);
+        if (cleanUpdates.activeTournamentEventId !== undefined) setActiveTournamentEventId(cleanUpdates.activeTournamentEventId);
+        if (cleanUpdates.tournamentState !== undefined) setTournamentState(cleanUpdates.tournamentState);
 
         localStorage.setItem('poker_cloud_backup', JSON.stringify(newState));
 
@@ -1490,6 +2089,9 @@
                         if(data.requireConfirm !== undefined) setRequireConfirm(data.requireConfirm);
                         if(data.requireMemberInfo !== undefined) setRequireMemberInfo(data.requireMemberInfo);
                         if(data.adminLock) setAdminLock(data.adminLock);
+                        if(data.systemMode) setSystemMode(data.systemMode);
+                        if(data.activeTournamentEventId !== undefined) setActiveTournamentEventId(data.activeTournamentEventId);
+                        if(data.tournamentState) setTournamentState(data.tournamentState);
                     }
                 } else {
                     const emptyPml = Array.from({length: 30}, () => ({ table: '', seat: '', blind: '', player: '', reqTime: '', status: '', movedTime: '', remark: '' }));
@@ -1497,7 +2099,7 @@
                     const initialVis = {};
                     BLINDS.forEach(b => initialVis[b.prefix] = (b.prefix !== 'D' && b.prefix !== 'G'));
 
-                    const initialState = { queues: [], history: [], pmlData: emptyPml, pmlHistory: [], tables: initialTables, blindVis: initialVis, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS, autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false, adminLock: { isLocked: false, lockedBy: '' }, lastModified: Date.now() };
+                    const initialState = { queues: [], history: [], pmlData: emptyPml, pmlHistory: [], tables: initialTables, blindVis: initialVis, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS, autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false, adminLock: { isLocked: false, lockedBy: '' }, systemMode: 'cash', activeTournamentEventId: null, tournamentState: { currentLevelIndex: 0, isRunning: false, levelStartTime: Date.now(), pausedAt: Date.now(), entries: 0, playersRemaining: 0 }, lastModified: Date.now() };
 
                     docRef.set(initialState);
                 }
@@ -1519,6 +2121,9 @@
                 if (localBackup.weeklyPresets) setWeeklyPresets(localBackup.weeklyPresets);
                 if (localBackup.autoBlindEnabled !== undefined) setAutoBlindEnabled(localBackup.autoBlindEnabled);
                 if (localBackup.adminLock) setAdminLock(localBackup.adminLock);
+                if (localBackup.systemMode) setSystemMode(localBackup.systemMode);
+                if (localBackup.activeTournamentEventId !== undefined) setActiveTournamentEventId(localBackup.activeTournamentEventId);
+                if (localBackup.tournamentState) setTournamentState(localBackup.tournamentState);
             }
         }
 
@@ -2351,9 +2956,17 @@
               <>
                 <div className="bg-[#1e293b] border-b border-[#334155] p-2 flex justify-between items-center z-30 relative">
                   <div className="flex gap-2 items-center z-10">
-                    <button onClick={() => setAdminLayoutMode('both')} className={`px-4 py-1.5 text-xs sm:text-sm font-bold rounded shadow transition ${adminLayoutMode === 'both' ? 'bg-[#d8b46e] text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Split View</button>
-                    <button onClick={() => setAdminLayoutMode('tables')} className={`px-4 py-1.5 text-xs sm:text-sm font-bold rounded shadow transition hidden sm:block ${adminLayoutMode === 'tables' ? 'bg-[#d8b46e] text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Tables Only</button>
-                    <button onClick={() => setAdminLayoutMode('queues')} className={`px-4 py-1.5 text-xs sm:text-sm font-bold rounded shadow transition hidden sm:block ${adminLayoutMode === 'queues' ? 'bg-[#d8b46e] text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Queues Only</button>
+                    {systemMode === 'cash' ? (
+                        <>
+                        <button onClick={() => setAdminLayoutMode('both')} className={`px-4 py-1.5 text-xs sm:text-sm font-bold rounded shadow transition ${adminLayoutMode === 'both' ? 'bg-[#d8b46e] text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Split View</button>
+                        <button onClick={() => setAdminLayoutMode('tables')} className={`px-4 py-1.5 text-xs sm:text-sm font-bold rounded shadow transition hidden sm:block ${adminLayoutMode === 'tables' ? 'bg-[#d8b46e] text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Tables Only</button>
+                        <button onClick={() => setAdminLayoutMode('queues')} className={`px-4 py-1.5 text-xs sm:text-sm font-bold rounded shadow transition hidden sm:block ${adminLayoutMode === 'queues' ? 'bg-[#d8b46e] text-black' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Queues Only</button>
+                        </>
+                    ) : (
+                        <div className="text-[#D8B673] font-bold px-2 py-1 flex items-center gap-2">
+                           <Icons.Settings /> TOURNAMENT CLOCK CONTROL
+                        </div>
+                    )}
                   </div>
                   
                   <div className="hidden md:flex absolute inset-0 items-center justify-center pointer-events-none gap-3">
@@ -2381,185 +2994,257 @@
                         </button>
                     </div>
 
-                    <button onClick={() => setView('admin-pml')} className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm px-3 py-1.5 rounded transition shadow">Movement List</button>
+                    <button onClick={() => setDialog({
+                        type: 'confirm',
+                        title: 'System Mode Configuration',
+                        message: `Currently operating in ${systemMode.toUpperCase()} mode.\n\nSwitching modes will change the dashboard layout for Staff and the Wall Display.\n\nNote: Active cash game queues will remain in the background if you switch to Tournament Mode.`,
+                        confirmText: systemMode === 'cash' ? 'Switch to Tournament Mode' : 'Switch to Cash Game Mode',
+                        onConfirm: () => {
+                            updateCloudState({ systemMode: systemMode === 'cash' ? 'tournament' : 'cash' });
+                            setDialog(null);
+                        },
+                        onCancel: () => setDialog(null)
+                    })} className="bg-yellow-600 hover:bg-yellow-500 text-black font-bold text-xs sm:text-sm px-3 py-1.5 rounded transition shadow flex items-center gap-1">
+                        <Icons.Settings /> Mode
+                    </button>
+
+                    {systemMode === 'cash' && (
+                        <button onClick={() => setView('admin-pml')} className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm px-3 py-1.5 rounded transition shadow">Movement List</button>
+                    )}
+                    
                     <button onClick={handleAdminExit} className="text-gray-400 text-xs sm:text-sm underline hover:text-white px-2">Exit</button>
                   </div>
                 </div>
 
                 <div className="flex flex-col lg:flex-row flex-1 w-full bg-pattern overflow-hidden">
                   
-                  {(adminLayoutMode === 'both' || adminLayoutMode === 'tables') ? (
-                    <div className={`overflow-y-auto p-2 sm:p-4 custom-scrollbar ${adminLayoutMode === 'both' ? 'w-full lg:w-3/4' : 'flex-1'}`}>
-                      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-20`}>
-                        {tables.filter(t => t.isOpen).map((table, tIdx) => {
-                          const realIdx = tables.findIndex(x => x.id === table.id);
-
-                          return (
-                            <div key={table.id} className="bg-[#1e293b] border border-[#334155] rounded-md shadow-xl overflow-hidden flex flex-col">
-                              <div className="bg-[#0f172a] p-1.5 border-b border-[#334155] flex justify-between items-center gap-1">
-                                <h3 className="text-white font-bold text-[10px] sm:text-xs whitespace-nowrap">{table.id}</h3>
-                                <select 
-                                  className="w-auto min-w-[100px] max-w-[140px] bg-[#334155] text-[#D8B673] text-[10px] sm:text-[11px] font-bold p-1 rounded outline-none border border-[#475569] truncate ml-2"
-                                  value={table.blindPrefix}
+                  {systemMode === 'tournament' ? (
+                      <div className="flex-1 flex flex-col p-4 gap-4 h-full">
+                          {/* Tournament Selector */}
+                          <div className="bg-[#1e293b] border border-[#334155] p-4 rounded-xl shadow-lg flex gap-4 items-center shrink-0">
+                              <div className="text-gray-400 font-bold uppercase tracking-wider text-sm">Active Event:</div>
+                              <select 
+                                  className="bg-black border border-gray-600 text-[#D8B673] font-bold p-2.5 rounded-lg flex-1 focus:outline-none focus:border-[#D8B673]"
+                                  value={activeTournamentEventId || ''}
                                   onChange={(e) => {
-                                    const newPrefix = e.target.value;
-                                    if (newPrefix && tables[realIdx].seats.some(s => s !== null)) return setDialog({ type: 'alert', title: 'Action Denied', message: 'Cannot change table blind while players are seated.', onConfirm: () => setDialog(null) });
-                                    const newT = [...tables]; newT[realIdx].blindPrefix = newPrefix; updateCloudState({ tables: newT });
+                                      const eventId = e.target.value;
+                                      const matchedEvent = TOURNAMENT_EVENTS.find(evt => evt.id === eventId);
+                                      updateCloudState({ 
+                                          activeTournamentEventId: eventId,
+                                          tournamentState: {
+                                              currentLevelIndex: 0,
+                                              isRunning: false,
+                                              levelStartTime: Date.now(),
+                                              pausedAt: Date.now(),
+                                              entries: 0,
+                                              playersRemaining: 0,
+                                              blindStructure: JSON.parse(JSON.stringify(TOURNAMENT_BLIND_STRUCTURE)),
+                                              customEvent: matchedEvent,
+                                              customPrizePool: null
+                                          }
+                                      });
                                   }}
-                                >
-                                  <option value="">-- Assign Blind --</option>
-                                  {visibleBlindsList.map(b => <option key={b.prefix} value={b.prefix}>{b.blind} ({b.buyIn})</option>)}
-                                </select>
-                              </div>
+                              >
+                                  <option value="" disabled>-- Select Tournament Event --</option>
+                                  {TOURNAMENT_EVENTS.map(evt => (
+                                      <option key={evt.id} value={evt.id}>{evt.name} (Buy-in: ${evt.buyIn})</option>
+                                  ))}
+                              </select>
+                          </div>
 
-                              <div className="p-1.5 flex-1 flex flex-col gap-0.5">
-                                {table.seats.map((seatQueue, sIdx) => {
-                                  const isSpare = sIdx === 9;
-                                  const label = isSpare ? 'Spare' : `Seat ${sIdx + 1}`;
-                                  const isHighlighted = seatQueue && highlightedPhone && highlightedPhone === seatQueue.phone;
-                                  
-                                  return (
-                                    <div key={sIdx} className={`text-[10px] sm:text-xs border rounded transition-colors draggable-item ${isHighlighted ? 'bg-yellow-900/50 border-yellow-500' : seatQueue ? 'bg-[#3b82f6]/20 border-[#3b82f6]/50' : 'bg-[#0f172a] border-[#334155] hover:bg-[#1e293b]'}`}>
-                                      {seatQueue ? (
-                                        <div className="flex flex-col">
-                                           <div 
-                                             className={`flex items-center justify-between px-1.5 sm:px-2 py-1.5 cursor-pointer cursor-grab h-8 ${isHighlighted ? 'hover:bg-yellow-800/40' : ''}`}
-                                             draggable={true} onDragStart={(e) => handleDragStartSeat(e, table.id, sIdx)}
-                                             onClick={() => {
-                                                const isExpanding = !(expandedSeat?.tId === table.id && expandedSeat?.sIdx === sIdx);
-                                                setExpandedSeat(isExpanding ? {tId: table.id, sIdx} : null);
-                                                setHighlightedPhone(isExpanding ? seatQueue.phone : null);
-                                             }}
-                                           >
-                                             <span className={`font-bold truncate px-0.5 text-[10px] sm:text-xs flex items-center gap-1 w-full ${isHighlighted ? 'text-yellow-300' : 'text-white'}`}>
-                                               {expandedSeat?.tId === table.id && expandedSeat?.sIdx === sIdx ? <Icons.ChevronDown className={`shrink-0 w-3 h-3 ${isHighlighted ? 'text-yellow-400' : ''}`} /> : <Icons.ChevronRight className={`shrink-0 w-3 h-3 ${isHighlighted ? 'text-yellow-400' : ''}`} />}
-                                               <span className={`text-[10px] sm:text-xs font-normal w-14 sm:w-16 shrink-0 ${isHighlighted ? 'text-yellow-200' : 'text-gray-400'}`}>{label}</span>
-                                               <span className="truncate">{seatQueue.id} <span className={`font-normal ${isHighlighted ? 'text-yellow-100' : 'text-gray-300'}`}>({seatQueue.nickName})</span></span>
-                                             </span>
-                                           </div>
-                                           {expandedSeat?.tId === table.id && expandedSeat?.sIdx === sIdx ? (
-                                              <div className={`p-1.5 mx-1 mb-1 rounded border text-[9px] sm:text-[10px] shadow-inner ${isHighlighted ? 'bg-yellow-900/60 border-yellow-600' : 'bg-[#1e3a8a]/40 border-[#1e40af]'}`}>
-                                                 <div className={`grid grid-cols-[50px_1fr] gap-0.5 ${isHighlighted ? 'text-yellow-100' : 'text-gray-200'}`}>
-                                                   <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Queue</span><span className="font-bold">{seatQueue.id}</span>
-                                                   <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Name</span><span className="font-bold truncate">{seatQueue.nickName}</span>
-                                                   <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Member</span><span className="font-bold truncate text-[8px] sm:text-[9px]">{seatQueue.memberName || 'N/A'} ({seatQueue.memberId || 'N/A'})</span>
-                                                   <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Contact</span><span className="font-bold truncate">{seatQueue.phone}</span>
-                                                 </div>
-                                                 <button onClick={(e) => { e.stopPropagation(); removePlayerFromSeat(realIdx, sIdx, seatQueue); }} className="mt-1.5 w-full bg-red-600/80 hover:bg-red-500 text-white font-bold py-1 rounded transition">Remove Player</button>
-                                              </div>
-                                           ) : null}
-                                        </div>
-                                      ) : (
-                                        <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropToSeat(e, table.id, sIdx)} className="flex items-center justify-center px-1.5 py-1 h-8">
-                                          <span className="text-gray-500 font-bold w-full text-center text-[10px] sm:text-xs">{label}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
+                          {/* Active Tournament Dashboard */}
+                          {activeTournamentEventId ? (
+                              <TournamentClock 
+                                  activeEvent={TOURNAMENT_EVENTS.find(e => e.id === activeTournamentEventId)}
+                                  state={tournamentState}
+                                  updateState={(newState) => {
+                                      const currentTourneyState = fullStateRef.current.tournamentState || {};
+                                      updateCloudState({ tournamentState: { ...currentTourneyState, ...newState } });
+                                  }}
+                                  setDialog={setDialog}
+                              />
+                          ) : (
+                              <div className="flex-1 flex items-center justify-center border-2 border-dashed border-[#334155] rounded-xl text-gray-500 font-bold uppercase tracking-widest">
+                                  Please select an event to initialize the clock.
                               </div>
-                            </div>
-                          );
-                        })}
-                        {tables.filter(t => t.isOpen).length === 0 ? <div className="col-span-full p-8 text-center text-gray-500 italic text-sm">No tables are open. Use 'Manage Tables'.</div> : null}
+                          )}
                       </div>
-                    </div>
-                  ) : null}
+                  ) : (
+                      <>
+                      {(adminLayoutMode === 'both' || adminLayoutMode === 'tables') ? (
+                        <div className={`overflow-y-auto p-2 sm:p-4 custom-scrollbar ${adminLayoutMode === 'both' ? 'w-full lg:w-3/4' : 'flex-1'}`}>
+                          <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-20`}>
+                            {tables.filter(t => t.isOpen).map((table, tIdx) => {
+                              const realIdx = tables.findIndex(x => x.id === table.id);
 
-                  {(adminLayoutMode === 'both' || adminLayoutMode === 'queues') ? (
-                    <div className={`${adminLayoutMode === 'both' ? 'w-full lg:w-1/4' : 'w-full'} flex-shrink-0 bg-[#0f172a] border-l border-[#334155] flex flex-col shadow-[-10px_0_15px_-3px_rgba(0,0,0,0.5)] z-20`}>
-                      <div className="flex flex-col bg-[#1e293b] border-b border-[#334155] z-30 shrink-0">
-                        <div className="p-3 flex items-center gap-2 border-b border-[#334155]">
-                          <button 
-                             onClick={() => {
-                                setDialog({
-                                   type: 'prompt', title: 'Update Supervisor Info', message: 'Enter Poker Supervisor Name / EMPID:', input: adminName === 'Poker Supervisor/ EMPID' ? '' : adminName, confirmText: 'Save & Auto-Lock',
-                                   onConfirm: () => { 
-                                       const val = document.getElementById('dialog-input').value.trim() || 'Poker Supervisor/ EMPID'; 
-                                       updateCloudState({ 
-                                           adminName: val,
-                                           adminLock: { isLocked: true, lockedBy: val }
-                                       }); 
-                                       setDialog(null); 
-                                   }, 
-                                   onCancel: () => setDialog(null)
-                                });
-                             }}
-                             className="flex-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-xs py-2 px-3 rounded text-center shadow shadow-black/50 outline-none transition overflow-hidden whitespace-nowrap text-ellipsis"
-                          >{adminName}</button>
+                              return (
+                                <div key={table.id} className="bg-[#1e293b] border border-[#334155] rounded-md shadow-xl overflow-hidden flex flex-col">
+                                  <div className="bg-[#0f172a] p-1.5 border-b border-[#334155] flex justify-between items-center gap-1">
+                                    <h3 className="text-white font-bold text-[10px] sm:text-xs whitespace-nowrap">{table.id}</h3>
+                                    <select 
+                                      className="w-auto min-w-[100px] max-w-[140px] bg-[#334155] text-[#D8B673] text-[10px] sm:text-[11px] font-bold p-1 rounded outline-none border border-[#475569] truncate ml-2"
+                                      value={table.blindPrefix}
+                                      onChange={(e) => {
+                                        const newPrefix = e.target.value;
+                                        if (newPrefix && tables[realIdx].seats.some(s => s !== null)) return setDialog({ type: 'alert', title: 'Action Denied', message: 'Cannot change table blind while players are seated.', onConfirm: () => setDialog(null) });
+                                        const newT = [...tables]; newT[realIdx].blindPrefix = newPrefix; updateCloudState({ tables: newT });
+                                      }}
+                                    >
+                                      <option value="">-- Assign Blind --</option>
+                                      {visibleBlindsList.map(b => <option key={b.prefix} value={b.prefix}>{b.blind} ({b.buyIn})</option>)}
+                                    </select>
+                                  </div>
 
-                          <button
-                            onClick={() => {
-                                const newLockState = !adminLock.isLocked;
-                                updateCloudState({ 
-                                  adminLock: { isLocked: newLockState, lockedBy: adminName } 
-                                });
-                            }}
-                            className={`flex items-center gap-1.5 px-3 py-2 rounded text-white font-bold text-xs shadow transition border shrink-0 ${adminLock.isLocked ? 'bg-green-700 hover:bg-green-600 border-green-500' : 'bg-red-700 hover:bg-red-600 border-red-500 animate-pulse'}`}
-                          >
-                            {adminLock.isLocked ? '🔒 Locked' : '🔓 Unlocked'}
-                          </button>
-
-                          <button onClick={() => setIsAdminControlsExpanded(!isAdminControlsExpanded)} className="bg-gray-700 text-white p-2 rounded shadow hover:bg-gray-600 transition shrink-0">
-                            {isAdminControlsExpanded ? <Icons.ChevronUp /> : <Icons.ChevronDown />}
-                          </button>
-                        </div>
-                        
-                        <div className={`transition-all overflow-hidden ${isAdminControlsExpanded ? 'max-h-[400px]' : 'max-h-0'}`}>
-                          <div className="p-3 pt-0 flex flex-col gap-2 mt-3">
-                            <div className="grid grid-cols-2 gap-2">
-                              <button onClick={() => setAdminRegisterOpen(true)} className="col-span-2 bg-blue-700 hover:bg-blue-600 text-white font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition flex items-center justify-center gap-2">⚡ Admin Fast Registration</button>
-                              <button onClick={() => { setSelectedRestores([]); setRestoreModalOpen(true); }} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Restore 100 Delete</button>
-                              <button onClick={() => setResetModalOpen(true)} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Reset Queues</button>
-                              <button onClick={() => setBlindModalOpen(true)} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Blind Vis Option</button>
-                              <button onClick={() => setTableModalOpen(true)} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Manage Tables</button>
-                              <button onClick={() => updateCloudState({ requireConfirm: !requireConfirm })} className="col-span-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Require Confirmation: {requireConfirm ? 'ON' : 'OFF (Bypass)'}</button>
-                              <button onClick={() => updateCloudState({ requireMemberInfo: !requireMemberInfo })} className="col-span-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Member Req: {requireMemberInfo ? 'ON (Strict)' : 'OFF (Bypass)'}</button>
-                            </div>
-                            <div className="flex flex-col gap-2 mt-2">
-                              <button onClick={() => triggerDownloads(false)} className="w-full bg-green-700 hover:bg-green-600 text-white font-bold text-xs py-2 rounded transition shadow flex items-center justify-center gap-2"><Icons.Download /> Backup / Download History</button>
-                              <button onClick={() => document.getElementById('upload-backup-input').click()} className="w-full bg-indigo-700 hover:bg-indigo-600 text-white font-bold text-xs py-2 rounded transition shadow flex items-center justify-center gap-2"><Icons.Upload /> Restore / Upload Data File</button>
-                              <input type="file" id="upload-backup-input" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} />
-                            </div>
+                                  <div className="p-1.5 flex-1 flex flex-col gap-0.5">
+                                    {table.seats.map((seatQueue, sIdx) => {
+                                      const isSpare = sIdx === 9;
+                                      const label = isSpare ? 'Spare' : `Seat ${sIdx + 1}`;
+                                      const isHighlighted = seatQueue && highlightedPhone && highlightedPhone === seatQueue.phone;
+                                      
+                                      return (
+                                        <div key={sIdx} className={`text-[10px] sm:text-xs border rounded transition-colors draggable-item ${isHighlighted ? 'bg-yellow-900/50 border-yellow-500' : seatQueue ? 'bg-[#3b82f6]/20 border-[#3b82f6]/50' : 'bg-[#0f172a] border-[#334155] hover:bg-[#1e293b]'}`}>
+                                          {seatQueue ? (
+                                            <div className="flex flex-col">
+                                               <div 
+                                                 className={`flex items-center justify-between px-1.5 sm:px-2 py-1.5 cursor-pointer cursor-grab h-8 ${isHighlighted ? 'hover:bg-yellow-800/40' : ''}`}
+                                                 draggable={true} onDragStart={(e) => handleDragStartSeat(e, table.id, sIdx)}
+                                                 onClick={() => {
+                                                    const isExpanding = !(expandedSeat?.tId === table.id && expandedSeat?.sIdx === sIdx);
+                                                    setExpandedSeat(isExpanding ? {tId: table.id, sIdx} : null);
+                                                    setHighlightedPhone(isExpanding ? seatQueue.phone : null);
+                                                 }}
+                                               >
+                                                 <span className={`font-bold truncate px-0.5 text-[10px] sm:text-xs flex items-center gap-1 w-full ${isHighlighted ? 'text-yellow-300' : 'text-white'}`}>
+                                                   {expandedSeat?.tId === table.id && expandedSeat?.sIdx === sIdx ? <Icons.ChevronDown className={`shrink-0 w-3 h-3 ${isHighlighted ? 'text-yellow-400' : ''}`} /> : <Icons.ChevronRight className={`shrink-0 w-3 h-3 ${isHighlighted ? 'text-yellow-400' : ''}`} />}
+                                                   <span className={`text-[10px] sm:text-xs font-normal w-14 sm:w-16 shrink-0 ${isHighlighted ? 'text-yellow-200' : 'text-gray-400'}`}>{label}</span>
+                                                   <span className="truncate">{seatQueue.id} <span className={`font-normal ${isHighlighted ? 'text-yellow-100' : 'text-gray-300'}`}>({seatQueue.nickName})</span></span>
+                                                 </span>
+                                               </div>
+                                               {expandedSeat?.tId === table.id && expandedSeat?.sIdx === sIdx ? (
+                                                  <div className={`p-1.5 mx-1 mb-1 rounded border text-[9px] sm:text-[10px] shadow-inner ${isHighlighted ? 'bg-yellow-900/60 border-yellow-600' : 'bg-[#1e3a8a]/40 border-[#1e40af]'}`}>
+                                                     <div className={`grid grid-cols-[50px_1fr] gap-0.5 ${isHighlighted ? 'text-yellow-100' : 'text-gray-200'}`}>
+                                                       <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Queue</span><span className="font-bold">{seatQueue.id}</span>
+                                                       <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Name</span><span className="font-bold truncate">{seatQueue.nickName}</span>
+                                                       <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Member</span><span className="font-bold truncate text-[8px] sm:text-[9px]">{seatQueue.memberName || 'N/A'} ({seatQueue.memberId || 'N/A'})</span>
+                                                       <span className={isHighlighted ? 'text-yellow-200' : 'text-gray-400'}>Contact</span><span className="font-bold truncate">{seatQueue.phone}</span>
+                                                     </div>
+                                                     <button onClick={(e) => { e.stopPropagation(); removePlayerFromSeat(realIdx, sIdx, seatQueue); }} className="mt-1.5 w-full bg-red-600/80 hover:bg-red-500 text-white font-bold py-1 rounded transition">Remove Player</button>
+                                                  </div>
+                                               ) : null}
+                                            </div>
+                                          ) : (
+                                            <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropToSeat(e, table.id, sIdx)} className="flex items-center justify-center px-1.5 py-1 h-8">
+                                              <span className="text-gray-500 font-bold w-full text-center text-[10px] sm:text-xs">{label}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {tables.filter(t => t.isOpen).length === 0 ? <div className="col-span-full p-8 text-center text-gray-500 italic text-sm">No tables are open. Use 'Manage Tables'.</div> : null}
                           </div>
                         </div>
-                      </div>
+                      ) : null}
 
-                      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-4 pb-20">
-                        {visibleBlindsList.map(b => {
-                          const blindQs = queues.filter(q => q.blindObj.prefix === b.prefix);
-                          const isCollapsed = collapsedBlinds[b.prefix];
-                          
-                          return (
-                            <div key={b.prefix} className="flex flex-col min-h-[40px]" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropToBlindList(e, b.prefix)}>
-                              <div onClick={() => setCollapsedBlinds(prev => ({ ...prev, [b.prefix]: !prev[b.prefix] }))} className={`flex justify-between items-center bg-[#2f3b75] text-white text-sm font-bold px-3 py-2.5 shadow border border-[#3e4c8a] cursor-pointer transition-all ${isCollapsed ? 'rounded' : 'rounded-t rounded-b-none border-b-0'}`}>
-                                <div className="flex items-center gap-2">
-                                  <Icons.ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? '-rotate-90' : 'rotate-0'}`} />
-                                  <span>{b.blind} <span className="font-normal opacity-80 ml-1 text-xs hidden sm:inline-block">({b.buyIn})</span></span>
+                      {(adminLayoutMode === 'both' || adminLayoutMode === 'queues') ? (
+                        <div className={`${adminLayoutMode === 'both' ? 'w-full lg:w-1/4' : 'w-full'} flex-shrink-0 bg-[#0f172a] border-l border-[#334155] flex flex-col shadow-[-10px_0_15px_-3px_rgba(0,0,0,0.5)] z-20`}>
+                          <div className="flex flex-col bg-[#1e293b] border-b border-[#334155] z-30 shrink-0">
+                            <div className="p-3 flex items-center gap-2 border-b border-[#334155]">
+                              <button 
+                                 onClick={() => {
+                                    setDialog({
+                                       type: 'prompt', title: 'Update Supervisor Info', message: 'Enter Poker Supervisor Name / EMPID:', input: adminName === 'Poker Supervisor/ EMPID' ? '' : adminName, confirmText: 'Save & Auto-Lock',
+                                       onConfirm: () => { 
+                                           const val = document.getElementById('dialog-input').value.trim() || 'Poker Supervisor/ EMPID'; 
+                                           updateCloudState({ 
+                                               adminName: val,
+                                               adminLock: { isLocked: true, lockedBy: val }
+                                           }); 
+                                           setDialog(null); 
+                                       }, 
+                                       onCancel: () => setDialog(null)
+                                    });
+                                 }}
+                                 className="flex-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-xs py-2 px-3 rounded text-center shadow shadow-black/50 outline-none transition overflow-hidden whitespace-nowrap text-ellipsis"
+                              >{adminName}</button>
+
+                              <button
+                                onClick={() => {
+                                    const newLockState = !adminLock.isLocked;
+                                    updateCloudState({ 
+                                      adminLock: { isLocked: newLockState, lockedBy: adminName } 
+                                    });
+                                }}
+                                className={`flex items-center gap-1.5 px-3 py-2 rounded text-white font-bold text-xs shadow transition border shrink-0 ${adminLock.isLocked ? 'bg-green-700 hover:bg-green-600 border-green-500' : 'bg-red-700 hover:bg-red-600 border-red-500 animate-pulse'}`}
+                              >
+                                {adminLock.isLocked ? '🔒 Locked' : '🔓 Unlocked'}
+                              </button>
+
+                              <button onClick={() => setIsAdminControlsExpanded(!isAdminControlsExpanded)} className="bg-gray-700 text-white p-2 rounded shadow hover:bg-gray-600 transition shrink-0">
+                                {isAdminControlsExpanded ? <Icons.ChevronUp /> : <Icons.ChevronDown />}
+                              </button>
+                            </div>
+                            
+                            <div className={`transition-all overflow-hidden ${isAdminControlsExpanded ? 'max-h-[400px]' : 'max-h-0'}`}>
+                              <div className="p-3 pt-0 flex flex-col gap-2 mt-3">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button onClick={() => setAdminRegisterOpen(true)} className="col-span-2 bg-blue-700 hover:bg-blue-600 text-white font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition flex items-center justify-center gap-2">⚡ Admin Fast Registration</button>
+                                  <button onClick={() => { setSelectedRestores([]); setRestoreModalOpen(true); }} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Restore 100 Delete</button>
+                                  <button onClick={() => setResetModalOpen(true)} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Reset Queues</button>
+                                  <button onClick={() => setBlindModalOpen(true)} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Blind Vis Option</button>
+                                  <button onClick={() => setTableModalOpen(true)} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Manage Tables</button>
+                                  <button onClick={() => updateCloudState({ requireConfirm: !requireConfirm })} className="col-span-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Require Confirmation: {requireConfirm ? 'ON' : 'OFF (Bypass)'}</button>
+                                  <button onClick={() => updateCloudState({ requireMemberInfo: !requireMemberInfo })} className="col-span-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Member Req: {requireMemberInfo ? 'ON (Strict)' : 'OFF (Bypass)'}</button>
                                 </div>
-                                <div className="bg-[#1e293b] text-blue-200 px-2 py-0.5 rounded-full text-[10px] shadow-inner border border-[#334155]">Total: {blindQs.length}</div>
-                              </div>
-                              
-                              <div className={`bg-[#1e293b] border border-[#334155] rounded-b overflow-y-auto custom-scrollbar transition-all duration-300 ${isCollapsed ? 'max-h-0 border-none opacity-0' : 'max-h-[350px] p-2 opacity-100'}`}>
-                                {blindQs.length === 0 ? <div className="text-[#64748b] text-sm p-3 italic pointer-events-none font-medium">No queues</div> : (
-                                  <div className="flex flex-col gap-1.5 items-stretch">
-                                    {blindQs.map(q => <AdminQueueListItem key={q.id} q={q} b={b} expandedQId={expandedQId} setExpandedQId={setExpandedQId} highlightedPhone={highlightedPhone} setHighlightedPhone={setHighlightedPhone} handleDragStartQueue={handleDragStartQueue} handleDropToQueueItem={handleDropToQueueItem} finishQueue={finishQueue} updateQueueStatus={updateQueueStatus} acknowledgeGuestReply={acknowledgeGuestReply} confirmQueuePrompt={confirmQueuePrompt} isSeated={seatedPhones.has(q.phone)} />)}
-                                  </div>
-                                )}
+                                <div className="flex flex-col gap-2 mt-2">
+                                  <button onClick={() => triggerDownloads(false)} className="w-full bg-green-700 hover:bg-green-600 text-white font-bold text-xs py-2 rounded transition shadow flex items-center justify-center gap-2"><Icons.Download /> Backup / Download History</button>
+                                  <button onClick={() => document.getElementById('upload-backup-input').click()} className="w-full bg-indigo-700 hover:bg-indigo-600 text-white font-bold text-xs py-2 rounded transition shadow flex items-center justify-center gap-2"><Icons.Upload /> Restore / Upload Data File</button>
+                                  <input type="file" id="upload-backup-input" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} />
+                                </div>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
+                          </div>
 
-                      {showLiveBoard ? (
-                         <div className="border-t border-[#334155] p-2 bg-[#0f172a] h-48 overflow-y-auto">
-                            <h3 className="text-xs font-bold mb-2 text-[#D8B673] uppercase tracking-wider">Live Board Mini</h3>
-                            <QueueBoard queues={queues} visibleBlinds={visibleBlindsList} />
-                         </div>
+                          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-4 pb-20">
+                            {visibleBlindsList.map(b => {
+                              const blindQs = queues.filter(q => q.blindObj.prefix === b.prefix);
+                              const isCollapsed = collapsedBlinds[b.prefix];
+                              
+                              return (
+                                <div key={b.prefix} className="flex flex-col min-h-[40px]" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropToBlindList(e, b.prefix)}>
+                                  <div onClick={() => setCollapsedBlinds(prev => ({ ...prev, [b.prefix]: !prev[b.prefix] }))} className={`flex justify-between items-center bg-[#2f3b75] text-white text-sm font-bold px-3 py-2.5 shadow border border-[#3e4c8a] cursor-pointer transition-all ${isCollapsed ? 'rounded' : 'rounded-t rounded-b-none border-b-0'}`}>
+                                    <div className="flex items-center gap-2">
+                                      <Icons.ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? '-rotate-90' : 'rotate-0'}`} />
+                                      <span>{b.blind} <span className="font-normal opacity-80 ml-1 text-xs hidden sm:inline-block">({b.buyIn})</span></span>
+                                    </div>
+                                    <div className="bg-[#1e293b] text-blue-200 px-2 py-0.5 rounded-full text-[10px] shadow-inner border border-[#334155]">Total: {blindQs.length}</div>
+                                  </div>
+                                  
+                                  <div className={`bg-[#1e293b] border border-[#334155] rounded-b overflow-y-auto custom-scrollbar transition-all duration-300 ${isCollapsed ? 'max-h-0 border-none opacity-0' : 'max-h-[350px] p-2 opacity-100'}`}>
+                                    {blindQs.length === 0 ? <div className="text-[#64748b] text-sm p-3 italic pointer-events-none font-medium">No queues</div> : (
+                                      <div className="flex flex-col gap-1.5 items-stretch">
+                                        {blindQs.map(q => <AdminQueueListItem key={q.id} q={q} b={b} expandedQId={expandedQId} setExpandedQId={setExpandedQId} highlightedPhone={highlightedPhone} setHighlightedPhone={setHighlightedPhone} handleDragStartQueue={handleDragStartQueue} handleDropToQueueItem={handleDropToQueueItem} finishQueue={finishQueue} updateQueueStatus={updateQueueStatus} acknowledgeGuestReply={acknowledgeGuestReply} confirmQueuePrompt={confirmQueuePrompt} isSeated={seatedPhones.has(q.phone)} />)}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {showLiveBoard ? (
+                             <div className="border-t border-[#334155] p-2 bg-[#0f172a] h-48 overflow-y-auto">
+                                <h3 className="text-xs font-bold mb-2 text-[#D8B673] uppercase tracking-wider">Live Board Mini</h3>
+                                <QueueBoard queues={queues} visibleBlinds={visibleBlindsList} />
+                             </div>
+                          ) : null}
+                        </div>
                       ) : null}
-                    </div>
-                  ) : null}
+                      </>
+                  )}
                 </div>
               </>
             ) : null}
@@ -2592,25 +3277,43 @@
               <div className="fixed inset-0 z-[100] bg-black text-white flex flex-col overflow-hidden">
                  <button onClick={() => setView('admin-dash')} className="absolute top-0 right-0 w-32 h-32 z-[110] opacity-0 cursor-default" title="Close Wall Display"></button>
                  
-                 <div className="relative pt-6 pb-4 border-b border-gray-800 shrink-0 bg-black">
-                    <div className="text-center px-4 max-w-6xl mx-auto">
-                      <h1 onClick={() => setView('admin-dash')} title="Click to return to Admin Dashboard" className="text-3xl sm:text-4xl md:text-5xl font-black text-[#D8B673] uppercase tracking-widest mb-3 drop-shadow-md cursor-pointer hover:text-white transition">Resort Poker Hub</h1>
-                      <p className="text-[10px] sm:text-xs md:text-sm text-white mb-1 font-bold">Welcome to Resorts World Sentosa. Kindly present your Membership Card to register at our Poker Registration Counter.</p>
-                      <p className="text-[10px] sm:text-xs md:text-sm text-white font-bold">Resorts World Sentosa supports Responsible Gaming. Call NCPG Helpline at 1800-6-668-668 for assistance, or visit http://www.ncpg.org.sg for more information. To put a limit on how much you want to gamble, you may enquire with our staff for details.</p>
-                    </div>
-                    <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-start gap-4 sm:gap-6 pointer-events-none">
-                       <div className="text-right flex flex-col items-end">
-                          <div className="flex items-center gap-2">
-                             {isSyncing ? <Icons.Cloud className="w-5 h-5 text-green-400" /> : null}
-                             <h2 className="text-xl sm:text-3xl font-bold text-white tracking-widest">{now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</h2>
-                          </div>
-                          <p className="text-gray-400 text-[10px] sm:text-sm mt-1 uppercase tracking-widest">{now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                       </div>
-                    </div>
-                 </div>
-                 <div className="flex-1 overflow-hidden flex flex-col p-2 sm:p-4 bg-pattern">
-                     <QueueBoard queues={queues} visibleBlinds={visibleBlindsList} isWallDisplay={true} />
-                 </div>
+                 {systemMode === 'cash' ? (
+                     <>
+                     <div className="relative pt-6 pb-4 border-b border-gray-800 shrink-0 bg-black">
+                        <div className="text-center px-4 max-w-6xl mx-auto">
+                          <h1 onClick={() => setView('admin-dash')} title="Click to return to Admin Dashboard" className="text-3xl sm:text-4xl md:text-5xl font-black text-[#D8B673] uppercase tracking-widest mb-3 drop-shadow-md cursor-pointer hover:text-white transition">Resort Poker Hub</h1>
+                          <p className="text-[10px] sm:text-xs md:text-sm text-white mb-1 font-bold">Welcome to Resorts World Sentosa. Kindly present your Membership Card to register at our Poker Registration Counter.</p>
+                          <p className="text-[10px] sm:text-xs md:text-sm text-white font-bold">Resorts World Sentosa supports Responsible Gaming. Call NCPG Helpline at 1800-6-668-668 for assistance, or visit http://www.ncpg.org.sg for more information. To put a limit on how much you want to gamble, you may enquire with our staff for details.</p>
+                        </div>
+                        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-start gap-4 sm:gap-6 pointer-events-none">
+                           <div className="text-right flex flex-col items-end">
+                              <div className="flex items-center gap-2">
+                                 {isSyncing ? <Icons.Cloud className="w-5 h-5 text-green-400" /> : null}
+                                 <h2 className="text-xl sm:text-3xl font-bold text-white tracking-widest">{now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</h2>
+                              </div>
+                              <p className="text-gray-400 text-[10px] sm:text-sm mt-1 uppercase tracking-widest">{now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                           </div>
+                        </div>
+                     </div>
+                     <div className="flex-1 overflow-hidden flex flex-col p-2 sm:p-4 bg-pattern">
+                         <QueueBoard queues={queues} visibleBlinds={visibleBlindsList} isWallDisplay={true} />
+                     </div>
+                     </>
+                 ) : (
+                     <div className="flex-1 p-2 sm:p-4 bg-pattern h-full">
+                        {activeTournamentEventId ? (
+                            <TournamentClock 
+                                activeEvent={TOURNAMENT_EVENTS.find(e => e.id === activeTournamentEventId)}
+                                state={tournamentState}
+                                updateState={() => {}} // Read-only on wall board
+                            />
+                        ) : (
+                            <div className="flex-1 h-full flex items-center justify-center text-4xl font-black text-gray-600 uppercase tracking-widest">
+                                Tournament Clock Off
+                            </div>
+                        )}
+                     </div>
+                 )}
               </div>
             ) : null}
 
