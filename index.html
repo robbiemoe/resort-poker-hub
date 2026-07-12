@@ -249,6 +249,8 @@
       const [phone, setPhone] = useState('');
       const [activeCamera, setActiveCamera] = useState(null); 
       const [isProcessing, setIsProcessing] = useState(false);
+      const [showTicketMenu, setShowTicketMenu] = useState(false);
+      const [showCardMenu, setShowCardMenu] = useState(false);
 
       const handleQNumChange = (index, val) => {
         const upperVal = val.toUpperCase().trim();
@@ -416,47 +418,47 @@
           
           <div className={`flex gap-2 mb-6 ${requireMemberInfo ? '' : 'justify-center'}`}>
             <div className="flex flex-col gap-0.5 flex-1 max-w-[200px]">
-                <div className="flex items-stretch w-full shadow-lg rounded-lg overflow-hidden group">
+                <div className="relative flex items-stretch w-full shadow-lg group">
                     <button 
                       onClick={() => setActiveCamera('ticket')} 
-                      className="flex-1 flex items-center justify-center gap-2 bg-indigo-900/60 hover:bg-indigo-800 border-y border-l border-indigo-700/50 text-indigo-300 py-3 transition font-bold text-[10px] sm:text-xs"
+                      className="flex-1 flex items-center justify-center gap-2 bg-indigo-900/60 hover:bg-indigo-800 border border-indigo-700/50 rounded-l-lg text-indigo-300 py-3 transition font-bold text-[10px] sm:text-xs"
                     >
                         <Icons.Camera /> Scan Queue Ticket
                     </button>
-                    <div className="relative flex items-stretch">
-                       <button onClick={(e) => { e.currentTarget.nextElementSibling.classList.toggle('hidden'); }} className="bg-indigo-900/40 hover:bg-indigo-800 border-y border-r border-indigo-700/50 px-2 text-indigo-300 transition">
-                           <Icons.ChevronDown />
-                       </button>
-                       <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded shadow-xl hidden z-50 overflow-hidden">
-                           <input type="file" id="upload-ticket" accept="image/*" className="hidden" onChange={(e) => { handleFileUpload(e, 'ticket'); e.target.parentElement.classList.add('hidden'); }} />
-                           <button onClick={(e) => document.getElementById('upload-ticket').click()} className="w-full flex items-center justify-start gap-2 px-4 py-3 hover:bg-gray-700 text-gray-200 text-xs font-bold transition">
-                               <Icons.Upload /> Upload Photo Instead
-                           </button>
-                       </div>
-                    </div>
+                    <button onClick={() => setShowTicketMenu(!showTicketMenu)} className="bg-indigo-900/40 hover:bg-indigo-800 border-y border-r border-indigo-700/50 rounded-r-lg px-2 text-indigo-300 transition">
+                        <Icons.ChevronDown />
+                    </button>
+                    {showTicketMenu && (
+                        <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded shadow-xl z-50">
+                            <input type="file" id="upload-ticket" accept="image/*" className="hidden" onChange={(e) => { handleFileUpload(e, 'ticket'); setShowTicketMenu(false); }} />
+                            <button onClick={() => document.getElementById('upload-ticket').click()} className="w-full flex items-center justify-start gap-2 px-4 py-3 hover:bg-gray-700 text-gray-200 text-xs font-bold transition">
+                                <Icons.Upload /> Upload Photo Instead
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {requireMemberInfo ? (
               <div className="flex flex-col gap-0.5 flex-1">
-                  <div className="flex items-stretch w-full shadow-lg rounded-lg overflow-hidden group">
+                  <div className="relative flex items-stretch w-full shadow-lg group">
                       <button 
                         onClick={() => setActiveCamera('card')} 
-                        className="flex-1 flex items-center justify-center gap-2 bg-indigo-900/60 hover:bg-indigo-800 border-y border-l border-indigo-700/50 text-indigo-300 py-3 transition font-bold text-[10px] sm:text-xs"
+                        className="flex-1 flex items-center justify-center gap-2 bg-indigo-900/60 hover:bg-indigo-800 border border-indigo-700/50 rounded-l-lg text-indigo-300 py-3 transition font-bold text-[10px] sm:text-xs"
                       >
                           <Icons.Camera /> Scan Member Card
                       </button>
-                      <div className="relative flex items-stretch">
-                         <button onClick={(e) => { e.currentTarget.nextElementSibling.classList.toggle('hidden'); }} className="bg-indigo-900/40 hover:bg-indigo-800 border-y border-r border-indigo-700/50 px-2 text-indigo-300 transition">
-                             <Icons.ChevronDown />
-                         </button>
-                         <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded shadow-xl hidden z-50 overflow-hidden">
-                             <input type="file" id="upload-card" accept="image/*" className="hidden" onChange={(e) => { handleFileUpload(e, 'card'); e.target.parentElement.classList.add('hidden'); }} />
-                             <button onClick={(e) => document.getElementById('upload-card').click()} className="w-full flex items-center justify-start gap-2 px-4 py-3 hover:bg-gray-700 text-gray-200 text-xs font-bold transition">
-                                 <Icons.Upload /> Upload Photo Instead
-                             </button>
-                         </div>
-                      </div>
+                      <button onClick={() => setShowCardMenu(!showCardMenu)} className="bg-indigo-900/40 hover:bg-indigo-800 border-y border-r border-indigo-700/50 rounded-r-lg px-2 text-indigo-300 transition">
+                          <Icons.ChevronDown />
+                      </button>
+                      {showCardMenu && (
+                          <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded shadow-xl z-50">
+                              <input type="file" id="upload-card" accept="image/*" className="hidden" onChange={(e) => { handleFileUpload(e, 'card'); setShowCardMenu(false); }} />
+                              <button onClick={() => document.getElementById('upload-card').click()} className="w-full flex items-center justify-start gap-2 px-4 py-3 hover:bg-gray-700 text-gray-200 text-xs font-bold transition">
+                                  <Icons.Upload /> Upload Photo Instead
+                              </button>
+                          </div>
+                      )}
                   </div>
               </div>
             ) : null}
@@ -1168,6 +1170,7 @@
       
       const [activeCamera, setActiveCamera] = useState(false);
       const [isProcessing, setIsProcessing] = useState(false);
+      const [showTicketMenu, setShowTicketMenu] = useState(false);
 
       const processCapturedImage = async (dataUrl) => {
           setActiveCamera(false);
@@ -1274,24 +1277,24 @@
             <h3 className="text-lg font-bold text-white mb-4 border-b border-gray-600 pb-2 text-[#D8B673] shrink-0">⚡ Admin Fast Registration</h3>
             <div className="overflow-y-auto custom-scrollbar pr-1 mb-4 space-y-4">
               
-              <div className="flex items-stretch w-full shadow-lg rounded-lg overflow-hidden group">
+              <div className="relative flex items-stretch w-full shadow-lg group">
                   <button 
                     onClick={() => setActiveCamera(true)} 
-                    className="flex-1 flex items-center justify-center gap-2 bg-indigo-900/60 hover:bg-indigo-800 border-y border-l border-indigo-700/50 text-indigo-300 py-3 transition font-bold text-[10px] sm:text-xs"
+                    className="flex-1 flex items-center justify-center gap-2 bg-indigo-900/60 hover:bg-indigo-800 border border-indigo-700/50 rounded-l-lg text-indigo-300 py-3 transition font-bold text-[10px] sm:text-xs"
                   >
                       <Icons.Camera /> Scan Queue Ticket
                   </button>
-                  <div className="relative flex items-stretch">
-                     <button onClick={(e) => { e.currentTarget.nextElementSibling.classList.toggle('hidden'); }} className="bg-indigo-900/40 hover:bg-indigo-800 border-y border-r border-indigo-700/50 px-3 text-indigo-300 transition">
-                         <Icons.ChevronDown />
-                     </button>
-                     <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded shadow-xl hidden z-50 overflow-hidden">
-                         <input type="file" id="admin-upload-ticket" accept="image/*" className="hidden" onChange={(e) => { handleFileUpload(e); e.target.parentElement.classList.add('hidden'); }} />
-                         <button onClick={(e) => document.getElementById('admin-upload-ticket').click()} className="w-full flex items-center justify-start gap-2 px-4 py-3 hover:bg-gray-700 text-gray-200 text-xs font-bold transition">
-                             <Icons.Upload /> Upload Photo Instead
-                         </button>
-                     </div>
-                  </div>
+                  <button onClick={() => setShowTicketMenu(!showTicketMenu)} className="bg-indigo-900/40 hover:bg-indigo-800 border-y border-r border-indigo-700/50 rounded-r-lg px-3 text-indigo-300 transition">
+                      <Icons.ChevronDown />
+                  </button>
+                  {showTicketMenu && (
+                      <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded shadow-xl z-50">
+                          <input type="file" id="admin-upload-ticket" accept="image/*" className="hidden" onChange={(e) => { handleFileUpload(e); setShowTicketMenu(false); }} />
+                          <button onClick={() => document.getElementById('admin-upload-ticket').click()} className="w-full flex items-center justify-start gap-2 px-4 py-3 hover:bg-gray-700 text-gray-200 text-xs font-bold transition">
+                              <Icons.Upload /> Upload Photo Instead
+                          </button>
+                      </div>
+                  )}
               </div>
 
               <div className="space-y-4">
