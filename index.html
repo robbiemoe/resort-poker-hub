@@ -180,6 +180,429 @@
 
     // --- RE-INTEGRATED COMPONENTS ---
 
+    function AdminTournamentConfigModal({ state, activeEvent, onSave, onClose }) {
+        const currentStructure = state.blindStructure || TOURNAMENT_BLIND_STRUCTURE;
+        const currentLevel = currentStructure[state.currentLevelIndex] || currentStructure[0];
+        const customEvent = state.customEvent || activeEvent;
+
+        const [eventName, setEventName] = useState(customEvent.name || '');
+        const [prizePool, setPrizePool] = useState(state.customPrizePool || '');
+        const [startingChips, setStartingChips] = useState(customEvent.startingChips || '');
+
+        const [isBreak, setIsBreak] = useState(currentLevel.isBreak || false);
+        const [levelLabel, setLevelLabel] = useState(currentLevel.isBreak ? (currentLevel.label || '') : (currentLevel.level || ''));
+        const [duration, setDuration] = useState(currentLevel.duration || customEvent.blindDuration || '');
+        const [smallBlind, setSmallBlind] = useState(currentLevel.sb || '');
+        const [bigBlind, setBigBlind] = useState(currentLevel.bb || '');
+        const [ante, setAnte] = useState(currentLevel.ante || '');
+        
+        const [resetTimer, setResetTimer] = useState(false);
+
+        const handleSave = () => {
+            const newStructure = JSON.parse(JSON.stringify(currentStructure));
+            newStructure[state.currentLevelIndex] = {
+                ...newStructure[state.currentLevelIndex],
+                isBreak: isBreak,
+                duration: Number(duration) || 0,
+                level: isBreak ? undefined : levelLabel,
+                label: isBreak ? levelLabel : undefined,
+                sb: isBreak ? undefined : Number(smallBlind) || 0,
+                bb: isBreak ? undefined : Number(bigBlind) || 0,
+                ante: isBreak ? undefined : Number(ante) || 0
+            };
+
+            const newEvent = {
+                ...customEvent,
+                name: eventName,
+                startingChips: Number(startingChips) || 0
+            };
+
+            const updates = {
+                customEvent: newEvent,
+                customPrizePool: prizePool !== '' ? Number(prizePool) : null,
+                blindStructure: newStructure
+            };
+
+            if (resetTimer) {
+                updates.levelStartTime = Date.now();
+                updates.pausedAt = Date.now();
+                updates.isRunning = false;
+            }
+
+            onSave(updates);
+        };
+
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                <div className="bg-[#0f172a] border border-[#334155] rounded-xl shadow-2xl max-w-2xl w-full flex flex-col">
+                    {/* Header */}
+                    <div className="flex justify-between items-center p-4 sm:p-5 border-b border-[#334155]">
+                        <h2 className="text-xl font-bold text-[#D8B673] flex items-center gap-2">
+                            <Icons.Settings /> Tournament Configuration
+                        </h2>
+                        <button onClick={onClose} className="text-gray-400 hover:text-white transition"><Icons.Close /></button>
+                    </div>
+
+                    {/* Body */}
+                    <div className="p-4 sm:p-6 space-y-6 overflow-y-auto max-h-[80vh] custom-scrollbar">
+                        
+                        {/* Event Details Section */}
+                        <div className="space-y-4">
+                            <h3 className="text-xs font-black tracking-widest text-gray-400 uppercase border-b border-[#334155] pb-2">Event Details Override</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] sm:text-xs font-bold text-gray-400 mb-1">Event Name Display</label>
+                                    <input type="text" value={eventName} onChange={e => setEventName(e.target.value)} className="w-full bg-[#1e293b] border border-[#334155] rounded-lg p-2.5 text-white focus:outline-none focus:border-[#D8B673]" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] sm:text-xs font-bold text-gray-400 mb-1">Manual Prize Pool ($)</label>
+                                    <input type="number" value={prizePool} onChange={e => setPrizePool(e.target.value)} placeholder="Auto-calculated if empty" className="w-full bg-[#1e293b] border border-[#334155] rounded-lg p-2.5 text-white focus:outline-none focus:border-[#D8B673] no-spinners" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] sm:text-xs font-bold text-gray-400 mb-1">Starting Chips</label>
+                                    <input type="number" value={startingChips} onChange={e => setStartingChips(e.target.value)} className="w-full bg-[#1e293b] border border-[#334155] rounded-lg p-2.5 text-white focus:outline-none focus:border-[#D8B673] no-spinners" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Current Level Section */}
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-end border-b border-[#334155] pb-2">
+                                <h3 className="text-xs font-black tracking-widest text-gray-400 uppercase">Current Level Override</h3>
+                                <label className="flex items-center gap-2 cursor-pointer border border-[#D8B673]/30 px-3 py-1 rounded bg-[#D8B673]/10 hover:bg-[#D8B673]/20 transition">
+                                    <input type="checkbox" checked={isBreak} onChange={e => setIsBreak(e.target.checked)} className="w-4 h-4 accent-[#D8B673]" />
+                                    <span className="text-[#D8B673] font-bold text-xs uppercase tracking-widest">Is Break Mode</span>
+                                </label>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="lg:col-span-2">
+                                    <label className="block text-[10px] sm:text-xs font-bold text-gray-400 mb-1">Level / Break Label</label>
+                                    <input type="text" value={levelLabel} onChange={e => setLevelLabel(e.target.value)} placeholder="e.g. Level 1" className="w-full bg-[#1e293b] border border-[#334155] rounded-lg p-2.5 text-white focus:outline-none focus:border-[#D8B673]" />
+                                </div>
+                                <div className="lg:col-span-2">
+                                    <label className="block text-[10px] sm:text-xs font-bold text-gray-400 mb-1">Duration (Minutes)</label>
+                                    <input type="number" value={duration} onChange={e => setDuration(e.target.value)} className="w-full bg-[#1e293b] border border-[#334155] rounded-lg p-2.5 text-white focus:outline-none focus:border-[#D8B673] no-spinners" />
+                                </div>
+                                
+                                {!isBreak && (
+                                    <>
+                                        <div>
+                                            <label className="block text-[10px] sm:text-xs font-bold text-gray-400 mb-1">Small Blind</label>
+                                            <input type="number" value={smallBlind} onChange={e => setSmallBlind(e.target.value)} className="w-full bg-[#1e293b] border border-[#334155] rounded-lg p-2.5 text-white focus:outline-none focus:border-[#D8B673] no-spinners" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] sm:text-xs font-bold text-gray-400 mb-1">Big Blind</label>
+                                            <input type="number" value={bigBlind} onChange={e => setBigBlind(e.target.value)} className="w-full bg-[#1e293b] border border-[#334155] rounded-lg p-2.5 text-white focus:outline-none focus:border-[#D8B673] no-spinners" />
+                                        </div>
+                                        <div className="lg:col-span-2">
+                                            <label className="block text-[10px] sm:text-xs font-bold text-gray-400 mb-1">Ante</label>
+                                            <input type="number" value={ante} onChange={e => setAnte(e.target.value)} className="w-full bg-[#1e293b] border border-[#334155] rounded-lg p-2.5 text-white focus:outline-none focus:border-[#D8B673] no-spinners" />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="mt-4 bg-[#1e293b] border border-[#334155] rounded-lg p-3">
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" checked={resetTimer} onChange={e => setResetTimer(e.target.checked)} className="w-5 h-5 accent-[#D8B673]" />
+                                    <span className="text-gray-300 font-medium text-sm">Reset timer to full duration upon saving</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex justify-end gap-3 p-4 sm:p-5 border-t border-[#334155] bg-[#111827] rounded-b-xl">
+                        <button onClick={onClose} className="px-6 py-2.5 rounded-lg font-bold text-gray-300 bg-gray-800 hover:bg-gray-700 transition">Cancel</button>
+                        <button onClick={handleSave} className="px-6 py-2.5 rounded-lg font-bold text-black bg-[#D8B673] hover:bg-[#c29e5a] shadow-lg transition">Save & Apply</button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    function TournamentClock({ activeEvent, state, updateState, setDialog }) {
+        const [isConfigOpen, setIsConfigOpen] = useState(false);
+        const [timeDisplay, setTimeDisplay] = useState('00:00');
+        const [localEntries, setLocalEntries] = useState(state.entries || 0);
+        const [localRemaining, setLocalRemaining] = useState(state.playersRemaining || 0);
+
+        useEffect(() => {
+            setLocalEntries(state.entries);
+            setLocalRemaining(state.playersRemaining);
+        }, [state.entries, state.playersRemaining]);
+
+        const structure = state.blindStructure || TOURNAMENT_BLIND_STRUCTURE;
+        const currentLevel = structure[state.currentLevelIndex] || structure[0];
+        const nextLevel = structure[state.currentLevelIndex + 1];
+        
+        const eventData = state.customEvent || activeEvent;
+        const defaultLevelMs = (currentLevel.duration || eventData.blindDuration) * 60 * 1000;
+
+        useEffect(() => {
+            let interval;
+            if (state.isRunning) {
+                interval = setInterval(() => {
+                    const elapsed = Date.now() - state.levelStartTime;
+                    const remaining = Math.max(0, defaultLevelMs - elapsed);
+                    
+                    if (remaining === 0) {
+                        setTimeDisplay('00:00');
+                    } else {
+                        const mins = Math.floor(remaining / 60000);
+                        const secs = Math.floor((remaining % 60000) / 1000);
+                        setTimeDisplay(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+                    }
+                }, 1000);
+            } else {
+                const elapsed = state.pausedAt - state.levelStartTime;
+                const remaining = Math.max(0, defaultLevelMs - elapsed);
+                const mins = Math.floor(remaining / 60000);
+                const secs = Math.floor((remaining % 60000) / 1000);
+                setTimeDisplay(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+            }
+
+            return () => clearInterval(interval);
+        }, [state.isRunning, state.levelStartTime, state.pausedAt, defaultLevelMs]);
+
+        const handleStartPause = () => {
+            if (state.isRunning) {
+                updateState({ isRunning: false, pausedAt: Date.now() });
+            } else {
+                const pauseDuration = Date.now() - (state.pausedAt || state.levelStartTime);
+                updateState({ isRunning: true, levelStartTime: state.levelStartTime + pauseDuration });
+            }
+        };
+
+        const changeLevel = (direction) => {
+            const newIndex = state.currentLevelIndex + direction;
+            if (newIndex >= 0 && newIndex < structure.length) {
+                updateState({ 
+                    currentLevelIndex: newIndex,
+                    levelStartTime: Date.now(),
+                    pausedAt: Date.now(),
+                    isRunning: false
+                });
+            }
+        };
+
+        const handleEntriesChange = (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (!isNaN(val)) {
+                setLocalEntries(val);
+                updateState({ entries: val });
+            } else if (e.target.value === '') {
+                setLocalEntries('');
+            }
+        };
+
+        const handleRemainingChange = (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (!isNaN(val)) {
+                setLocalRemaining(val);
+                updateState({ playersRemaining: val });
+            } else if (e.target.value === '') {
+                setLocalRemaining('');
+            }
+        };
+
+        const commitEntries = () => {
+            const val = parseInt(localEntries, 10) || 0;
+            setLocalEntries(val);
+            updateState({ entries: val });
+        };
+
+        const commitRemaining = () => {
+            const val = parseInt(localRemaining, 10) || 0;
+            setLocalRemaining(val);
+            updateState({ playersRemaining: val });
+        };
+
+        // Calculations
+        const avgStack = state.playersRemaining > 0 ? Math.floor((state.entries * eventData.startingChips) / state.playersRemaining) : eventData.startingChips;
+        
+        let displayPrizePool = 0;
+        let isGuaranteeMet = false;
+        
+        if (state.customPrizePool) {
+            displayPrizePool = state.customPrizePool;
+            isGuaranteeMet = true;
+        } else if (eventData.isMainEvent) {
+            const calculatedPool = state.entries * eventData.buyIn;
+            displayPrizePool = Math.max(480000, calculatedPool);
+            isGuaranteeMet = calculatedPool >= 480000;
+        } else if (eventData.isBounty) {
+            displayPrizePool = state.entries * 700; // $700 to pool, $300 to bounty
+        } else {
+            displayPrizePool = state.entries * eventData.buyIn;
+        }
+
+        const handleTimeClick = () => {
+            if (!setDialog) return; // Read-only for wall board
+            setDialog({
+                type: 'prompt',
+                title: 'Adjust Clock Remaining Time',
+                message: `Enter new time remaining in minutes (0 - ${currentLevel.duration || eventData.blindDuration}):`,
+                input: Math.floor(parseInt(timeDisplay.split(':')[0], 10)).toString(),
+                confirmText: 'Update Time',
+                onConfirm: () => {
+                    const newMins = parseInt(document.getElementById('dialog-input').value, 10);
+                    if (!isNaN(newMins)) {
+                        const newRemainingMs = newMins * 60 * 1000;
+                        updateState({
+                            levelStartTime: Date.now() - (defaultLevelMs - newRemainingMs),
+                            pausedAt: Date.now(),
+                            isRunning: false
+                        });
+                    }
+                    setDialog(null);
+                },
+                onCancel: () => setDialog(null)
+            });
+        };
+
+        const handleConfigClick = () => {
+            if (!setDialog) return;
+            setIsConfigOpen(true);
+        };
+
+        return (
+            <div className="flex flex-col h-full bg-[#0a0f18] rounded-xl border-2 border-[#D8B673] overflow-hidden shadow-[0_0_30px_rgba(216,182,115,0.15)] relative">
+                {/* Tournament Header */}
+                <div className="bg-gradient-to-r from-[#D8B673]/20 via-[#1e293b] to-[#D8B673]/20 border-b border-[#D8B673]/30 p-2 sm:p-4 text-center shrink-0">
+                    <h1 className="text-[#D8B673] font-black uppercase tracking-[0.2em] text-xl sm:text-3xl md:text-5xl text-shadow-sm drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] flex items-center justify-center gap-4">
+                        Resorts Poker Championship
+                        {eventData.isBounty ? <span className="bg-red-600 text-white text-[10px] sm:text-xs md:text-sm px-3 py-1 rounded-full border border-red-400 font-bold tracking-widest shadow-lg">$300 BOUNTY</span> : null}
+                    </h1>
+                    <p className="text-gray-300 font-bold tracking-widest uppercase text-[10px] sm:text-xs md:text-sm mt-1">{eventData.name}</p>
+                </div>
+
+                {/* Main Clock Area */}
+                <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 relative">
+                    
+                    {currentLevel.isBreak ? (
+                        <div className="text-center w-full animate-pulse">
+                            <div className="text-5xl sm:text-7xl md:text-[120px] font-black text-red-500 tracking-widest uppercase mb-4 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                                BREAK
+                            </div>
+                            <div className="text-xl sm:text-2xl text-red-400 font-bold uppercase tracking-widest">
+                                {currentLevel.label}
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="text-center w-full max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center px-4 sm:px-12 mb-2 sm:mb-6">
+                                <div className="text-center">
+                                    <p className="text-gray-400 font-bold uppercase tracking-[0.3em] text-[10px] sm:text-xs md:text-sm mb-1">Blinds</p>
+                                    <div className="text-4xl sm:text-6xl md:text-7xl lg:text-[100px] font-black text-white tracking-tighter drop-shadow-lg tabular-nums">
+                                        {currentLevel.sb.toLocaleString()} <span className="text-[#D8B673] font-normal">/</span> {currentLevel.bb.toLocaleString()}
+                                    </div>
+                                </div>
+                                <div className="text-center mt-4 md:mt-0">
+                                    <p className="text-gray-400 font-bold uppercase tracking-[0.3em] text-[10px] sm:text-xs md:text-sm mb-1">Ante</p>
+                                    <div className="text-4xl sm:text-6xl md:text-7xl lg:text-[100px] font-black text-[#D8B673] tracking-tighter drop-shadow-lg tabular-nums">
+                                        {currentLevel.ante.toLocaleString()}
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    <div className="text-center mt-4 w-full">
+                        <div 
+                            onClick={handleTimeClick}
+                            className={`text-[80px] sm:text-[120px] md:text-[180px] lg:text-[250px] font-black tracking-tighter tabular-nums leading-none ${currentLevel.isBreak ? 'text-red-500' : 'text-white'} ${setDialog ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                            style={{ textShadow: '0 10px 30px rgba(0,0,0,0.8)' }}
+                        >
+                            {timeDisplay}
+                        </div>
+                        <p className="text-gray-400 font-bold uppercase tracking-[0.4em] text-xs sm:text-sm md:text-base mt-2">Level {currentLevel.isBreak ? 'Pause' : currentLevel.level}</p>
+                    </div>
+
+                </div>
+
+                {/* Footer Stats Bar */}
+                <div className="bg-[#111827] border-t border-[#D8B673]/30 p-3 sm:p-4 grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.5)] z-10">
+                    <div className="bg-black/50 border border-gray-700 rounded-lg p-2 sm:p-3 text-center">
+                        <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px] mb-1">Avg Stack</p>
+                        <p className="text-white font-black text-sm sm:text-xl md:text-2xl tabular-nums">{avgStack.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-black/50 border border-gray-700 rounded-lg p-2 sm:p-3 text-center">
+                        <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px] mb-1">Next Level</p>
+                        {nextLevel ? (
+                            <p className={`font-black text-sm sm:text-xl md:text-2xl ${nextLevel.isBreak ? 'text-red-400' : 'text-[#D8B673]'}`}>
+                                {nextLevel.isBreak ? 'BREAK' : `${nextLevel.sb.toLocaleString()} / ${nextLevel.bb.toLocaleString()}`}
+                            </p>
+                        ) : (
+                            <p className="text-gray-600 font-black text-sm sm:text-xl md:text-2xl">END</p>
+                        )}
+                    </div>
+                    <div className={`col-span-2 border rounded-lg p-2 sm:p-3 text-center flex flex-col justify-center ${eventData.isMainEvent && !isGuaranteeMet ? 'bg-indigo-900/30 border-indigo-500/50' : 'bg-black/50 border-gray-700'}`}>
+                        <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px] mb-0.5">Prize Pool</p>
+                        <p className={`font-black text-lg sm:text-2xl md:text-3xl tabular-nums ${eventData.isMainEvent && !isGuaranteeMet ? 'text-indigo-400' : 'text-green-400'}`}>
+                            ${displayPrizePool.toLocaleString()}
+                        </p>
+                        {eventData.isMainEvent && !isGuaranteeMet ? <p className="text-[8px] sm:text-[10px] text-indigo-300 font-bold uppercase tracking-widest mt-0.5">S$480,000 Guarantee Applies</p> : null}
+                    </div>
+                </div>
+
+                {/* Admin Controls Overlay (Only visible if setDialog is provided) */}
+                {setDialog && (
+                    <div className="absolute top-4 left-4 flex flex-col gap-2 z-50">
+                        <div className="flex gap-2">
+                            <button onClick={() => changeLevel(-1)} className="bg-gray-800 hover:bg-gray-700 text-white font-bold p-3 rounded-lg shadow-lg transition border border-gray-600"><Icons.ChevronUp /></button>
+                            <button onClick={() => changeLevel(1)} className="bg-gray-800 hover:bg-gray-700 text-white font-bold p-3 rounded-lg shadow-lg transition border border-gray-600"><Icons.ChevronDown /></button>
+                            
+                            <button 
+                                onClick={handleStartPause} 
+                                className={`font-black uppercase tracking-widest px-6 py-3 rounded-lg shadow-[0_0_15px_rgba(0,0,0,0.5)] transition-all flex items-center gap-2 border-2 ${state.isRunning ? 'bg-red-600 hover:bg-red-500 text-white border-red-400' : 'bg-green-600 hover:bg-green-500 text-white border-green-400 primary-action-glow'}`}
+                            >
+                                {state.isRunning ? <><Icons.Pause /> PAUSE</> : <><Icons.Play /> START CLOCK</>}
+                            </button>
+
+                            <button onClick={handleConfigClick} className="bg-gray-800 hover:bg-gray-700 text-[#D8B673] font-bold p-3 rounded-lg shadow-lg transition border border-gray-600 flex items-center gap-2 text-xs uppercase tracking-widest">
+                                <Icons.Settings /> Setup & Config
+                            </button>
+                        </div>
+                        
+                        <div className="bg-gray-900/90 backdrop-blur border border-gray-700 p-3 rounded-lg shadow-2xl w-64 mt-2">
+                            <div className="flex justify-between items-center mb-3 border-b border-gray-700 pb-2">
+                                <span className="text-gray-400 font-bold text-xs uppercase tracking-widest">Entries</span>
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => { setLocalEntries(prev => Math.max(0, parseInt(prev||0)-1)); updateState({ entries: Math.max(0, parseInt(localEntries||0)-1) }); }} className="bg-gray-700 hover:bg-gray-600 px-2 py-0.5 rounded text-white font-bold">-</button>
+                                    <input type="number" value={localEntries} onChange={handleEntriesChange} onBlur={commitEntries} className="w-14 bg-black text-white text-center font-bold border border-gray-600 rounded outline-none no-spinners" />
+                                    <button onClick={() => { setLocalEntries(prev => parseInt(prev||0)+1); updateState({ entries: parseInt(localEntries||0)+1 }); }} className="bg-gray-700 hover:bg-gray-600 px-2 py-0.5 rounded text-white font-bold">+</button>
+                                </div>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-gray-400 font-bold text-xs uppercase tracking-widest">Remaining</span>
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => { setLocalRemaining(prev => Math.max(0, parseInt(prev||0)-1)); updateState({ playersRemaining: Math.max(0, parseInt(localRemaining||0)-1) }); }} className="bg-gray-700 hover:bg-gray-600 px-2 py-0.5 rounded text-white font-bold">-</button>
+                                    <input type="number" value={localRemaining} onChange={handleRemainingChange} onBlur={commitRemaining} className="w-14 bg-black text-white text-center font-bold border border-gray-600 rounded outline-none no-spinners" />
+                                    <button onClick={() => { setLocalRemaining(prev => parseInt(prev||0)+1); updateState({ playersRemaining: parseInt(localRemaining||0)+1 }); }} className="bg-gray-700 hover:bg-gray-600 px-2 py-0.5 rounded text-white font-bold">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {isConfigOpen && (
+                    <AdminTournamentConfigModal
+                        state={state}
+                        activeEvent={eventData}
+                        onSave={(updates) => {
+                            updateState(updates);
+                            setIsConfigOpen(false);
+                        }}
+                        onClose={() => setIsConfigOpen(false)}
+                    />
+                )}
+            </div>
+        );
+    }
+
     function CameraScanner({ title, type, onCapture, onClose }) {
       const videoRef = useRef(null);
       const [error, setError] = useState('');
@@ -209,8 +632,10 @@
           canvas.height = videoRef.current.videoHeight;
           const ctx = canvas.getContext('2d');
           
-          // Apply extreme contrast and grayscale to isolate text
-          ctx.filter = 'grayscale(100%) contrast(300%) brightness(120%)';
+          // 1. Blur slightly to connect dot-matrix gaps in ESC/POS thermal fonts
+          // 2. High contrast & brightness to isolate text in low-light conditions
+          // 3. Grayscale to remove color noise
+          ctx.filter = 'blur(1px) grayscale(100%) contrast(300%) brightness(150%)';
           ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
           
           onCapture(canvas.toDataURL('image/jpeg'));
@@ -273,30 +698,41 @@
         setIsProcessing(true);
 
         try {
-            // Tesseract OCR configured to only look for numbers and A-F
-            const result = await Tesseract.recognize(dataUrl, 'eng', {
-                tessedit_char_whitelist: '0123456789ABCDEFabcdefXxOoIiLlZzSswWgG'
-            });
-            let text = result.data.text;
-            
-            // Clean up common OCR mistakes before parsing
-            const cleanText = (t) => t.replace(/\s+/g, '').toUpperCase()
-                                     .replace(/[O]/g, '0').replace(/[S]/g, '5')
-                                     .replace(/[LI]/g, '1').replace(/[Z]/g, '2');
+            const worker = await Tesseract.createWorker();
+            await worker.loadLanguage('eng');
+            await worker.initialize('eng');
 
             if (type === 'ticket') {
-                // 1. EXTRACT PASSWORD FIRST (to prevent it being read as a queue)
-                const phoneRegex = /[xX*]{3,}[^0-9oOsSlLiI\n]*([0-9oOsSlLiI]{4})/i;
+                // Strict whitelist: Forces Tesseract to guess '0' instead of 'O', '5' instead of 'S', etc.
+                await worker.setParameters({
+                    tessedit_char_whitelist: 'ABCDEFGabcdefg0123456789Xx* \n\r\t',
+                    tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT, // Optimal for receipt layouts
+                });
+            } else {
+                await worker.setParameters({
+                    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+                });
+            }
+
+            const result = await worker.recognize(dataUrl);
+            let text = result.data.text;
+            await worker.terminate();
+            
+            const cleanText = (t) => t.replace(/\s+/g, '').toUpperCase();
+
+            if (type === 'ticket') {
+                // 1. EXTRACT PASSWORD FIRST
+                const phoneRegex = /[xX*]{3,}[^0-9\n]*([0-9]{4})/i;
                 const phoneMatch = text.match(phoneRegex);
                 const phoneLast4 = phoneMatch ? cleanText(phoneMatch[1]) : '';
                 
-                // Remove the password digits from the text pool so they aren't parsed as a Queue ID later
+                // Remove the password digits from the text pool so they aren't parsed as a Queue ID
                 if (phoneMatch) {
                     text = text.replace(phoneMatch[0], '');
                 }
 
-                // 2. EXTRACT QUEUES
-                const queueRegex = /([A-F][0-9oOsSlLiIzZ]{3,})/gi;
+                // 2. EXTRACT QUEUES (Strictly A-G followed by exactly 4 digits)
+                const queueRegex = /[A-G]\s*[0-9]{4}/gi;
                 const queueMatches = text.match(queueRegex) || [];
                 const scannedQueues = [...new Set(queueMatches.map(cleanText))].slice(0, 3);
 
@@ -323,9 +759,9 @@
                     dialogFn({ type: 'alert', title: 'Scan Failed', message: 'Could not detect valid queue numbers or phone details from the ticket. Please ensure the ticket is in focus and try again.', onConfirm: () => dialogFn(null) });
                 }
             } else if (type === 'card') {
-                const idMatch = text.match(/\b[0-9oOsSlLiIzZ]{11}\b/);
+                const idMatch = text.match(/\b\d{11}\b/);
                 if (idMatch) {
-                    setEntries(prev => prev.map(e => ({ ...e, memberId: cleanText(idMatch[0]) })));
+                    setEntries(prev => prev.map(e => ({ ...e, memberId: idMatch[0] })));
                 } else {
                     dialogFn({ type: 'alert', title: 'Scan Failed', message: 'Could not automatically read the 11-digit member ID. Please try again.', onConfirm: () => dialogFn(null) });
                 }
@@ -408,7 +844,7 @@
              <div className="absolute inset-0 bg-black/80 z-[60] flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
                 <div className="ai-spinner mb-4"></div>
                 <p className="text-[#D8B673] font-bold tracking-widest text-sm uppercase text-center px-4 mt-2">
-                    Analyzing Text...<br/><span className="text-[10px] text-gray-400 normal-case tracking-normal">(Applying high-contrast filters)</span>
+                    Analyzing Image...<br/><span className="text-[10px] text-gray-400 normal-case tracking-normal">(Using Optical Font Enhancement)</span>
                 </p>
              </div>
           ) : null}
@@ -889,7 +1325,7 @@
                </div>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button onClick={handleClearCompleted} className="flex-1 sm:flex-none bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-50 transition text-sm shadow flex items-center justify-center gap-1">
+              <button onClick={handleClearCompleted} className="flex-1 sm:flex-none bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-500 transition text-sm shadow flex items-center justify-center gap-1">
                 <Icons.CheckDouble /> Clear Finished
               </button>
               <button onClick={onBack} className="flex-1 sm:flex-none bg-gray-800 text-white px-4 py-2 rounded font-bold hover:bg-gray-700 transition text-sm shadow">
@@ -1163,6 +1599,88 @@
       );
     }
 
+    function AdminGeofenceModal({ config, onSave, onClose }) {
+      const [enabled, setEnabled] = useState(config.enabled || false);
+      const [lat, setLat] = useState(config.latitude || 1.2540);
+      const [lon, setLon] = useState(config.longitude || 103.8238);
+      const [radius, setRadius] = useState(config.radiusMeters || 500);
+      const [statusMsg, setStatusMsg] = useState('');
+
+      const handleGetLocation = () => {
+        setStatusMsg('Fetching location...');
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    setLat(pos.coords.latitude.toFixed(6));
+                    setLon(pos.coords.longitude.toFixed(6));
+                    setStatusMsg('Location updated successfully!');
+                    setTimeout(() => setStatusMsg(''), 3000);
+                },
+                (err) => {
+                    setStatusMsg('Error getting location. Please check browser permissions.');
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        } else {
+            setStatusMsg('Geolocation is not supported by your browser.');
+        }
+      };
+
+      const handleSave = () => {
+        onSave({
+            enabled,
+            latitude: parseFloat(lat) || 0,
+            longitude: parseFloat(lon) || 0,
+            radiusMeters: parseInt(radius, 10) || 500
+        });
+      };
+
+      return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1e293b] border border-[#475569] p-6 rounded-xl shadow-2xl max-w-sm w-full flex flex-col">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-600 pb-2">
+               <h3 className="text-lg font-bold text-[#D8B673] flex items-center gap-2">📍 Location Security</h3>
+               <button onClick={onClose} className="text-gray-400 hover:text-white"><Icons.Close /></button>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+                <label className="flex items-center justify-between p-3 bg-gray-800 rounded border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition">
+                     <span className="text-white text-sm font-bold">Enable Geofencing</span>
+                     <div className={`relative inline-flex h-6 w-11 items-center rounded-full shrink-0 transition-colors ${enabled ? 'bg-green-500' : 'bg-gray-600'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                     </div>
+                     <input type="checkbox" className="hidden" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+                </label>
+
+                <div className={`space-y-3 transition-opacity ${enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                    <div>
+                        <label className="block text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Center Latitude</label>
+                        <input type="number" value={lat} onChange={e => setLat(e.target.value)} className="w-full bg-black border border-gray-600 rounded p-2 text-white focus:border-[#D8B673] outline-none no-spinners" />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Center Longitude</label>
+                        <input type="number" value={lon} onChange={e => setLon(e.target.value)} className="w-full bg-black border border-gray-600 rounded p-2 text-white focus:border-[#D8B673] outline-none no-spinners" />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Allowed Radius (Meters)</label>
+                        <input type="number" value={radius} onChange={e => setRadius(e.target.value)} className="w-full bg-black border border-gray-600 rounded p-2 text-white focus:border-[#D8B673] outline-none no-spinners" placeholder="e.g. 500" />
+                    </div>
+                    <button onClick={handleGetLocation} className="w-full bg-blue-900/40 hover:bg-blue-800 text-blue-300 font-bold text-xs py-2 rounded transition border border-blue-700/50 flex items-center justify-center gap-1">
+                        Get My Current Location
+                    </button>
+                    {statusMsg && <p className="text-center text-[10px] text-yellow-400 font-bold">{statusMsg}</p>}
+                </div>
+            </div>
+
+            <div className="flex gap-2 shrink-0">
+               <button onClick={onClose} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2.5 rounded transition">Cancel</button>
+               <button onClick={handleSave} className="flex-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition shadow-lg">Save Rules</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     function AdminFastRegisterModal({ visibleBlinds, onClose, onRegister, setDialog }) {
       const [entries, setEntries] = useState([{ qNum: '', blindIdx: 0 }]);
       const [nickName, setNickName] = useState('');
@@ -1176,20 +1694,31 @@
           setActiveCamera(false);
           setIsProcessing(true);
           try {
-              const result = await Tesseract.recognize(dataUrl, 'eng', {
-                  tessedit_char_whitelist: '0123456789ABCDEFabcdefXxOoIiLlZzSswWgG'
+              const worker = await Tesseract.createWorker();
+              await worker.loadLanguage('eng');
+              await worker.initialize('eng');
+
+              // Strict whitelist for Admin Ticket Scanning
+              await worker.setParameters({
+                  tessedit_char_whitelist: 'ABCDEFGabcdefg0123456789Xx* \n\r\t',
+                  tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
               });
+
+              const result = await worker.recognize(dataUrl);
               let text = result.data.text;
+              await worker.terminate();
               
-              const cleanText = (t) => t.replace(/\s+/g, '').toUpperCase().replace(/[O]/g, '0').replace(/[S]/g, '5').replace(/[LI]/g, '1').replace(/[Z]/g, '2');
+              const cleanText = (t) => t.replace(/\s+/g, '').toUpperCase();
               
-              const phoneRegex = /[xX*]{3,}[^0-9oOsSlLiI\n]*([0-9oOsSlLiI]{4})/i;
+              // 1. Extract Password First
+              const phoneRegex = /[xX*]{3,}[^0-9\n]*([0-9]{4})/i;
               const phoneMatch = text.match(phoneRegex);
               const phoneLast4 = phoneMatch ? cleanText(phoneMatch[1]) : '';
 
               if (phoneMatch) text = text.replace(phoneMatch[0], '');
 
-              const queueRegex = /([A-F][0-9oOsSlLiIzZ]{3,})/gi;
+              // 2. Extract Queues (Strictly A-G followed by exactly 4 digits)
+              const queueRegex = /[A-G]\s*[0-9]{4}/gi;
               const queueMatches = text.match(queueRegex) || [];
               const scannedQueues = [...new Set(queueMatches.map(cleanText))].slice(0, 3);
               
@@ -1269,7 +1798,7 @@
                <div className="absolute inset-0 bg-black/80 z-[60] flex flex-col items-center justify-center rounded-xl backdrop-blur-sm">
                   <div className="ai-spinner mb-4"></div>
                   <p className="text-[#D8B673] font-bold tracking-widest text-sm uppercase text-center px-4 mt-2">
-                      Analyzing Text...<br/><span className="text-[10px] text-gray-400 normal-case tracking-normal">(Applying high-contrast filters)</span>
+                      Analyzing Image...<br/><span className="text-[10px] text-gray-400 normal-case tracking-normal">(Using Optical Font Enhancement)</span>
                   </p>
                </div>
             ) : null}
@@ -1328,7 +1857,7 @@
             </div>
             <div className="flex gap-2 shrink-0">
               <button onClick={onClose} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2.5 rounded transition">Cancel</button>
-              <button onClick={handleRegister} disabled={!isFormValid} className="flex-1 bg-[#d8b46e] disabled:opacity-50 hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition">Register</button>
+              <button onClick={handleRegister} disabled={!isFormValid} className="flex-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold py-2.5 rounded transition shadow">Register</button>
             </div>
           </div>
         </div>
@@ -1484,469 +2013,6 @@
       );
     }
 
-    // --- TOURNAMENT CONFIG MODAL ---
-    function TournamentConfigModal({ state, activeEvent, updateState, onClose }) {
-        const [eventName, setEventName] = useState(state.customEvent?.name || activeEvent?.name || '');
-        const [prizePoolOverride, setPrizePoolOverride] = useState(state.customPrizePool || '');
-        const [startChips, setStartChips] = useState(state.customEvent?.startingChips || activeEvent?.startingChips || 0);
-        
-        const currentLvl = state.blindStructure?.[state.currentLevelIndex || 0] || TOURNAMENT_BLIND_STRUCTURE[state.currentLevelIndex || 0] || {};
-        
-        const [isBreak, setIsBreak] = useState(!!currentLvl.isBreak);
-        const [duration, setDuration] = useState(currentLvl.duration || activeEvent?.blindDuration || 10);
-        const [sb, setSb] = useState(currentLvl.sb || 0);
-        const [bb, setBb] = useState(currentLvl.bb || 0);
-        const [ante, setAnte] = useState(currentLvl.ante || 0);
-        const [levelLabel, setLevelLabel] = useState(currentLvl.label || '');
-        const [resetClock, setResetClock] = useState(false);
-
-        const handleSave = () => {
-            const newCustomEvent = {
-                ...(state.customEvent || activeEvent),
-                name: eventName,
-                startingChips: parseInt(startChips) || 0
-            };
-            
-            const newBlindStructure = state.blindStructure ? [...state.blindStructure] : JSON.parse(JSON.stringify(TOURNAMENT_BLIND_STRUCTURE));
-            
-            newBlindStructure[state.currentLevelIndex || 0] = {
-                ...newBlindStructure[state.currentLevelIndex || 0],
-                isBreak,
-                duration: parseInt(duration) || 10,
-                sb: parseInt(sb) || 0,
-                bb: parseInt(bb) || 0,
-                ante: parseInt(ante) || 0,
-                label: levelLabel || `Level ${currentLvl.level || (state.currentLevelIndex + 1)}`
-            };
-
-            const updates = {
-                customEvent: newCustomEvent,
-                customPrizePool: parseInt(prizePoolOverride) || null,
-                blindStructure: newBlindStructure
-            };
-
-            if (resetClock) {
-                updates.levelStartTime = Date.now();
-                updates.pausedAt = Date.now();
-                updates.isRunning = false;
-            }
-
-            updateState(updates);
-            onClose();
-        };
-
-        return (
-            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-                <div className="bg-[#111] border border-[#D8B673] rounded-xl shadow-[0_0_30px_rgba(216,182,115,0.2)] max-w-2xl w-full flex flex-col max-h-[90vh] overflow-hidden">
-                    <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
-                        <h2 className="text-xl font-black text-[#D8B673] flex items-center gap-2"><Icons.Settings /> Tournament Configuration</h2>
-                        <button onClick={onClose} className="text-gray-400 hover:text-white"><Icons.Close /></button>
-                    </div>
-
-                    <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
-                        {/* Event Override Section */}
-                        <div className="bg-black/50 p-4 rounded-lg border border-gray-800">
-                            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 border-b border-gray-800 pb-2">Event Details Override</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs text-gray-500 font-bold mb-1">Event Name Display</label>
-                                    <input type="text" value={eventName} onChange={e => setEventName(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673]" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 font-bold mb-1">Manual Prize Pool ($)</label>
-                                    <input type="number" value={prizePoolOverride} onChange={e => setPrizePoolOverride(e.target.value)} placeholder="Auto-calculated if empty" className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 font-bold mb-1">Starting Chips</label>
-                                    <input type="number" value={startChips} onChange={e => setStartChips(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Current Level Edit Section */}
-                        <div className="bg-black/50 p-4 rounded-lg border border-gray-800">
-                            <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-2">
-                                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Current Level Override</h3>
-                                <label className="flex items-center gap-2 cursor-pointer text-yellow-500 font-bold text-xs bg-yellow-900/20 px-2 py-1 rounded border border-yellow-700/50">
-                                    <input type="checkbox" checked={isBreak} onChange={e => setIsBreak(e.target.checked)} className="w-4 h-4 accent-yellow-500" />
-                                    IS BREAK MODE
-                                </label>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-                                <div className="col-span-2">
-                                    <label className="block text-xs text-gray-500 font-bold mb-1">Level / Break Label</label>
-                                    <input type="text" value={levelLabel} onChange={e => setLevelLabel(e.target.value)} placeholder={isBreak ? "e.g. Dinner Break" : "e.g. Level 1"} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673]" />
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="block text-xs text-gray-500 font-bold mb-1">Duration (Minutes)</label>
-                                    <input type="number" value={duration} onChange={e => setDuration(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
-                                </div>
-                                {!isBreak && (
-                                    <>
-                                        <div>
-                                            <label className="block text-xs text-gray-500 font-bold mb-1">Small Blind</label>
-                                            <input type="number" value={sb} onChange={e => setSb(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs text-gray-500 font-bold mb-1">Big Blind</label>
-                                            <input type="number" value={bb} onChange={e => setBb(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
-                                        </div>
-                                        <div className="col-span-2">
-                                            <label className="block text-xs text-gray-500 font-bold mb-1">Ante</label>
-                                            <input type="number" value={ante} onChange={e => setAnte(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white outline-none focus:border-[#D8B673] no-spinners" />
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                            <label className="flex items-center gap-2 cursor-pointer text-gray-300 text-sm mt-4 bg-gray-800 p-2 rounded">
-                                <input type="checkbox" checked={resetClock} onChange={e => setResetClock(e.target.checked)} className="w-4 h-4 accent-[#D8B673]" />
-                                Reset timer to full duration upon saving
-                            </label>
-                        </div>
-                    </div>
-
-                    <div className="p-4 border-t border-gray-800 bg-gray-900 flex justify-end gap-3 shrink-0">
-                        <button onClick={onClose} className="px-6 py-2 rounded font-bold text-gray-400 bg-gray-800 hover:bg-gray-700 transition border border-gray-700">Cancel</button>
-                        <button onClick={handleSave} className="px-8 py-2 rounded font-bold text-black bg-[#D8B673] hover:bg-[#c29e5a] transition shadow-lg">Save & Apply</button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // --- TOURNAMENT COMPONENT ---
-    function TournamentClock({ activeEvent, state, updateState, setDialog }) {
-        const [timeRemaining, setTimeRemaining] = useState(0);
-        const [configOpen, setConfigOpen] = useState(false);
-        const timerRef = useRef(null);
-
-        // Local state for smooth typing in admin inputs
-        const [inputEntries, setInputEntries] = useState(state.entries?.toString() || '0');
-        const [inputRemaining, setInputRemaining] = useState(state.playersRemaining?.toString() || '0');
-
-        useEffect(() => { setInputEntries(state.entries?.toString() || '0'); }, [state.entries]);
-        useEffect(() => { setInputRemaining(state.playersRemaining?.toString() || '0'); }, [state.playersRemaining]);
-
-        const currentStructure = state.blindStructure?.[state.currentLevelIndex || 0] || TOURNAMENT_BLIND_STRUCTURE[state.currentLevelIndex || 0] || {};
-        const nextStructure = state.blindStructure?.[(state.currentLevelIndex || 0) + 1] || TOURNAMENT_BLIND_STRUCTURE[(state.currentLevelIndex || 0) + 1] || {};
-        const displayEvent = state.customEvent || activeEvent;
-        
-        // Extract primitive value for stable useEffect dependencies
-        const durationMins = currentStructure.duration || displayEvent?.blindDuration || 10;
-
-        useEffect(() => {
-            const durationSecs = durationMins * 60;
-
-            if (state.isRunning) {
-                timerRef.current = setInterval(() => {
-                    const now = Date.now();
-                    const start = state.levelStartTime || now;
-                    const elapsed = Math.floor((now - start) / 1000);
-                    const remaining = Math.max(0, durationSecs - elapsed);
-                    
-                    setTimeRemaining(remaining);
-
-                    if (remaining === 0) {
-                        // Keep it at 0 when time expires
-                    }
-                }, 1000);
-            } else {
-                const now = Date.now();
-                const start = state.levelStartTime || now;
-                const paused = state.pausedAt || now;
-                const elapsed = Math.floor((paused - start) / 1000);
-                setTimeRemaining(Math.max(0, durationSecs - elapsed));
-            }
-
-            return () => clearInterval(timerRef.current);
-        }, [state.isRunning, state.levelStartTime, state.pausedAt, state.currentLevelIndex, durationMins]);
-
-        const formatTime = (secs) => {
-            const m = Math.floor(secs / 60);
-            const s = secs % 60;
-            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-        };
-
-        const toggleTimer = () => {
-            const now = Date.now();
-            if (state.isRunning) {
-                updateState({ isRunning: false, pausedAt: now });
-            } else {
-                const pauseDuration = now - (state.pausedAt || now);
-                updateState({ 
-                    isRunning: true, 
-                    levelStartTime: (state.levelStartTime || now) + pauseDuration,
-                    pausedAt: null
-                });
-            }
-        };
-
-        const changeLevel = (direction) => {
-            const newIndex = (state.currentLevelIndex || 0) + direction;
-            const structToUse = state.blindStructure || TOURNAMENT_BLIND_STRUCTURE;
-            if (newIndex >= 0 && newIndex < structToUse.length) {
-                updateState({
-                    currentLevelIndex: newIndex,
-                    levelStartTime: Date.now(),
-                    isRunning: false,
-                    pausedAt: Date.now()
-                });
-            }
-        };
-        
-        const adjustTimePrompt = () => {
-            if (!setDialog) return;
-            setDialog({
-                type: 'prompt',
-                title: 'Adjust Clock',
-                message: 'Enter new time remaining in minutes (e.g., 15):',
-                input: Math.floor(timeRemaining / 60).toString(),
-                confirmText: 'Update Time',
-                onConfirm: () => {
-                    const val = parseInt(document.getElementById('dialog-input').value);
-                    if (!isNaN(val) && val >= 0) {
-                        const newRemainingSecs = val * 60;
-                        const durationSecs = durationMins * 60;
-                        const newElapsedSecs = durationSecs - newRemainingSecs;
-                        
-                        const now = Date.now();
-                        const newStartTime = now - (newElapsedSecs * 1000);
-                        
-                        updateState({
-                            levelStartTime: newStartTime,
-                            pausedAt: state.isRunning ? null : now
-                        });
-                    }
-                    setDialog(null);
-                },
-                onCancel: () => setDialog(null)
-            });
-        };
-
-        const calcPrizePool = () => {
-            if (state.customPrizePool) return state.customPrizePool;
-            const entriesCount = state.entries || 0;
-            if (displayEvent?.isMainEvent) {
-                return Math.max(480000, entriesCount * 1500);
-            }
-            if (displayEvent?.isBounty) {
-                return entriesCount * 700; // $300 goes to bounty
-            }
-            return entriesCount * (displayEvent?.buyIn || 0);
-        };
-
-        const avgStack = (state.entries > 0 && state.playersRemaining > 0)
-            ? Math.floor(((state.entries || 0) * (displayEvent?.startingChips || 0)) / state.playersRemaining) 
-            : 0;
-
-        if (!displayEvent) return null;
-
-        return (
-            <div className="flex-1 flex flex-col bg-[#111] border border-gray-800 rounded-xl overflow-hidden relative shadow-2xl h-full">
-                {configOpen && <TournamentConfigModal state={state} activeEvent={activeEvent} updateState={updateState} onClose={() => setConfigOpen(false)} />}
-                
-                {/* Background Graphics */}
-                <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] pointer-events-none"></div>
-                
-                {/* Header */}
-                <div className="bg-red-900/80 border-b-4 border-red-600 p-4 text-center z-10 flex flex-col md:flex-row justify-between items-center gap-2">
-                    <div className="text-xl sm:text-2xl font-black text-[#D8B673] uppercase tracking-widest drop-shadow-md whitespace-nowrap">
-                        Resorts Poker Championship
-                    </div>
-                    <h1 className="text-xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-widest drop-shadow-md">
-                        {displayEvent.name}
-                    </h1>
-                    <div className="text-center md:text-right">
-                        <div className="text-red-200 text-xs font-bold uppercase">Tournament Mode</div>
-                        <div className="text-white font-bold">{new Date().toLocaleTimeString()}</div>
-                    </div>
-                </div>
-
-                {/* Main Content Area */}
-                <div className="flex-1 flex flex-col sm:flex-row p-6 gap-6 z-10">
-                    
-                    {/* Left Panel: Stats */}
-                    <div className="w-full sm:w-1/3 flex flex-col gap-4">
-                        <div className="bg-gray-900 border border-gray-700 p-4 rounded-lg shadow-inner text-center">
-                            <div className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-1">Prize Pool</div>
-                            <div className="text-4xl font-black text-[#D8B673]">
-                                ${calcPrizePool().toLocaleString()}
-                            </div>
-                            {activeEvent.isMainEvent && (state.entries || 0) < 320 && (
-                                <div className="text-xs text-red-400 mt-1">Guaranteed at $480,000</div>
-                            )}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-gray-900 border border-gray-700 p-4 rounded-lg shadow-inner text-center">
-                                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">Entries</div>
-                                <div className="text-3xl font-black text-white">{state.entries || 0}</div>
-                            </div>
-                            <div className="bg-gray-900 border border-gray-700 p-4 rounded-lg shadow-inner text-center">
-                                <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">Remaining</div>
-                                <div className="text-3xl font-black text-white">{state.playersRemaining || 0}</div>
-                            </div>
-                        </div>
-
-                        <div className="bg-gray-900 border border-gray-700 p-4 rounded-lg shadow-inner text-center">
-                            <div className="text-gray-400 text-xs font-bold uppercase tracking-wider">Avg Stack</div>
-                            <div className="text-3xl font-black text-blue-400">{avgStack.toLocaleString()}</div>
-                        </div>
-
-                        {displayEvent.isBounty && (
-                            <div className="bg-green-900/30 border border-green-700 p-4 rounded-lg text-center mt-auto">
-                                <div className="text-green-400 text-sm font-bold uppercase tracking-wider">Bounty Value</div>
-                                <div className="text-2xl font-black text-green-300">$300 / Player</div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Right Panel: Clock & Blinds */}
-                    <div className="w-full sm:w-2/3 flex flex-col justify-center items-center bg-gray-900 border border-gray-700 rounded-lg p-8 relative">
-                        
-                        {currentStructure.isBreak ? (
-                            <div className="text-center w-full">
-                                <h2 className="text-4xl sm:text-6xl font-black text-yellow-500 mb-6 uppercase tracking-widest animate-pulse">
-                                    {currentStructure.label || "Break"}
-                                </h2>
-                                <div 
-                                    className={`text-[100px] sm:text-[150px] leading-none font-black font-mono tracking-tighter cursor-pointer hover:opacity-80 transition ${state.isRunning ? 'text-white' : 'text-red-500'}`}
-                                    onClick={setDialog ? adjustTimePrompt : undefined}
-                                    title="Click to edit time"
-                                >
-                                    {formatTime(timeRemaining)}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="text-center w-full">
-                                <div className="flex justify-between items-end w-full border-b border-gray-700 pb-2 mb-6 px-4">
-                                    <div className="text-left">
-                                        <div className="text-gray-400 text-lg font-bold uppercase tracking-widest">Level</div>
-                                        <div className="text-4xl font-black text-white">{currentStructure.label || currentStructure.level || (state.currentLevelIndex + 1)}</div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-gray-400 text-sm font-bold uppercase tracking-widest">Ante</div>
-                                        <div className="text-3xl font-black text-purple-400">{currentStructure.ante?.toLocaleString() || 0}</div>
-                                    </div>
-                                </div>
-
-                                <div 
-                                    className={`text-[100px] sm:text-[180px] leading-none font-black font-mono tracking-tighter drop-shadow-2xl mb-6 cursor-pointer hover:opacity-80 transition ${state.isRunning ? 'text-white' : 'text-red-500'}`}
-                                    onClick={setDialog ? adjustTimePrompt : undefined}
-                                    title="Click to edit time"
-                                >
-                                    {formatTime(timeRemaining)}
-                                </div>
-
-                                <div className="bg-black/50 p-6 rounded-xl border border-gray-800 w-full inline-block">
-                                    <div className="text-gray-400 text-xl font-bold uppercase tracking-widest mb-2">Blinds</div>
-                                    <div className="text-5xl sm:text-7xl font-black text-[#D8B673]">
-                                        {currentStructure.sb?.toLocaleString() || 0} / {currentStructure.bb?.toLocaleString() || 0}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Next Level Preview */}
-                        {nextStructure && (
-                            <div className="absolute bottom-4 left-4 right-4 flex justify-between text-gray-500 text-sm font-bold uppercase tracking-wider">
-                                <span>Next: {nextStructure.isBreak ? (nextStructure.label || 'Break') : (nextStructure.label || `Level ${nextStructure.level || state.currentLevelIndex + 2}`)}</span>
-                                <span>
-                                    {nextStructure.isBreak 
-                                        ? `${nextStructure.duration} Mins` 
-                                        : `${nextStructure.sb?.toLocaleString() || 0} / ${nextStructure.bb?.toLocaleString() || 0} / ${nextStructure.ante?.toLocaleString() || 0}`
-                                    }
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Admin Controls (Hidden on Wall Display) */}
-                {setDialog && (
-                    <div className="bg-gray-900 border-t border-gray-700 p-4 flex justify-between items-center z-10 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
-                        <div className="flex gap-2">
-                            <button onClick={() => changeLevel(-1)} className="bg-gray-800 hover:bg-gray-700 p-3 rounded text-white shadow" title="Previous Level"><Icons.ChevronDown /></button>
-                            <button onClick={() => changeLevel(1)} className="bg-gray-800 hover:bg-gray-700 p-3 rounded text-white shadow" title="Next Level"><Icons.ChevronUp /></button>
-                        </div>
-                        
-                        <div className="flex items-center gap-4">
-                            <button 
-                                onClick={toggleTimer} 
-                                className={`px-12 py-4 rounded-full font-black text-2xl tracking-widest uppercase shadow-[0_0_20px_rgba(0,0,0,0.5)] transition-all active:scale-95 flex items-center gap-3 border-4 ${state.isRunning ? 'bg-red-700 hover:bg-red-600 text-white border-red-500' : 'bg-green-600 hover:bg-green-500 text-white border-green-400 primary-action-glow'}`}
-                            >
-                                {state.isRunning ? <><Icons.Pause /> Pause Clock</> : <><Icons.Play /> Start Clock</>}
-                            </button>
-                            
-                            <div className="flex flex-col gap-2">
-                                <button onClick={() => setConfigOpen(true)} className="bg-blue-800 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider px-4 py-2 rounded shadow flex items-center gap-1">
-                                    <Icons.Settings /> Setup & Config
-                                </button>
-                                <button onClick={() => updateState({ levelStartTime: Date.now(), pausedAt: Date.now(), isRunning: false })} className="text-gray-400 hover:text-white text-[10px] font-bold uppercase underline">
-                                    Reset Level Timer
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-6">
-                            <div className="flex flex-col items-center">
-                                <span className="text-[10px] text-gray-400 font-bold uppercase mb-1">Entries</span>
-                                <div className="flex gap-1 items-stretch h-8">
-                                    <button onClick={() => updateState({ entries: Math.max(0, (state.entries || 0) - 1) })} className="bg-gray-800 px-3 rounded text-white font-bold hover:bg-gray-700 leading-none">-</button>
-                                    <input 
-                                        type="number" 
-                                        className="w-16 bg-black border border-gray-600 text-center text-white font-bold rounded outline-none focus:border-[#D8B673] no-spinners"
-                                        value={inputEntries}
-                                        onChange={(e) => setInputEntries(e.target.value)}
-                                        onBlur={() => {
-                                            const val = parseInt(inputEntries);
-                                            updateState({ entries: isNaN(val) ? 0 : Math.max(0, val) });
-                                        }}
-                                        onKeyDown={(e) => {
-                                            if(e.key === 'Enter') {
-                                                const val = parseInt(inputEntries);
-                                                updateState({ entries: isNaN(val) ? 0 : Math.max(0, val) });
-                                                e.target.blur();
-                                            }
-                                        }}
-                                    />
-                                    <button onClick={() => updateState({ entries: (state.entries || 0) + 1 })} className="bg-gray-800 px-3 rounded text-white font-bold hover:bg-gray-700 leading-none">+</button>
-                                </div>
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <span className="text-[10px] text-gray-400 font-bold uppercase mb-1">Remaining</span>
-                                <div className="flex gap-1 items-stretch h-8">
-                                    <button onClick={() => updateState({ playersRemaining: Math.max(0, (state.playersRemaining || 0) - 1) })} className="bg-gray-800 px-3 rounded text-white font-bold hover:bg-gray-700 leading-none">-</button>
-                                    <input 
-                                        type="number" 
-                                        className="w-16 bg-black border border-gray-600 text-center text-white font-bold rounded outline-none focus:border-[#D8B673] no-spinners"
-                                        value={inputRemaining}
-                                        onChange={(e) => setInputRemaining(e.target.value)}
-                                        onBlur={() => {
-                                            const val = parseInt(inputRemaining);
-                                            updateState({ playersRemaining: isNaN(val) ? 0 : Math.max(0, val) });
-                                        }}
-                                        onKeyDown={(e) => {
-                                            if(e.key === 'Enter') {
-                                                const val = parseInt(inputRemaining);
-                                                updateState({ playersRemaining: isNaN(val) ? 0 : Math.max(0, val) });
-                                                e.target.blur();
-                                            }
-                                        }}
-                                    />
-                                    <button onClick={() => updateState({ playersRemaining: (state.playersRemaining || 0) + 1 })} className="bg-gray-800 px-3 rounded text-white font-bold hover:bg-gray-700 leading-none">+</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    }
-
-    // --- APP COMPONENT ---
-
     function App() {
       const [view, setView] = useState(() => {
         const params = new URLSearchParams(window.location.search);
@@ -1970,6 +2036,15 @@
       const [requireConfirm, setRequireConfirm] = useState(false);
       const [requireMemberInfo, setRequireMemberInfo] = useState(false);
       const [adminLock, setAdminLock] = useState({ isLocked: false, lockedBy: '' });
+
+      // --- NEW APP STATE: GEOFENCING SECURITY ---
+      const [geofenceConfig, setGeofenceConfig] = useState({
+          enabled: false,
+          latitude: 1.2540, // Default RWS Casino roughly
+          longitude: 103.8238,
+          radiusMeters: 500
+      });
+      const [guestLocationValid, setGuestLocationValid] = useState(null); // null = checking, true = ok, false = blocked
 
       // --- NEW APP STATE: SYSTEM MODE ---
       const [systemMode, setSystemMode] = useState('cash'); // 'cash' or 'tournament'
@@ -2004,6 +2079,7 @@
       const [adminRegisterOpen, setAdminRegisterOpen] = useState(false);
       const [resetModalOpen, setResetModalOpen] = useState(false);
       const [showNewDayReminder, setShowNewDayReminder] = useState(null);
+      const [geofenceModalOpen, setGeofenceModalOpen] = useState(false);
       
       const [autoBlindEnabled, setAutoBlindEnabled] = useState(true);
       const [weeklyPresets, setWeeklyPresets] = useState(DEFAULT_BLIND_PRESETS);
@@ -2092,6 +2168,7 @@
                         if(data.requireConfirm !== undefined) setRequireConfirm(data.requireConfirm);
                         if(data.requireMemberInfo !== undefined) setRequireMemberInfo(data.requireMemberInfo);
                         if(data.adminLock) setAdminLock(data.adminLock);
+                        if(data.geofenceConfig) setGeofenceConfig(data.geofenceConfig);
                         if(data.systemMode) setSystemMode(data.systemMode);
                         if(data.activeTournamentEventId !== undefined) setActiveTournamentEventId(data.activeTournamentEventId);
                         if(data.tournamentState) setTournamentState(data.tournamentState);
@@ -2102,7 +2179,11 @@
                     const initialVis = {};
                     BLINDS.forEach(b => initialVis[b.prefix] = (b.prefix !== 'D' && b.prefix !== 'G'));
 
-                    const initialState = { queues: [], history: [], pmlData: emptyPml, pmlHistory: [], tables: initialTables, blindVis: initialVis, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS, autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false, adminLock: { isLocked: false, lockedBy: '' }, systemMode: 'cash', activeTournamentEventId: null, tournamentState: { currentLevelIndex: 0, isRunning: false, levelStartTime: Date.now(), pausedAt: Date.now(), entries: 0, playersRemaining: 0 }, lastModified: Date.now() };
+                    const initialState = { 
+                        queues: [], history: [], pmlData: emptyPml, pmlHistory: [], tables: initialTables, blindVis: initialVis, penalties: [], weeklyPresets: DEFAULT_BLIND_PRESETS, autoBlindEnabled: true, adminName: 'Poker Supervisor/ EMPID', requireConfirm: false, requireMemberInfo: false, adminLock: { isLocked: false, lockedBy: '' }, 
+                        geofenceConfig: { enabled: false, latitude: 1.2540, longitude: 103.8238, radiusMeters: 500 },
+                        systemMode: 'cash', activeTournamentEventId: null, tournamentState: { currentLevelIndex: 0, isRunning: false, levelStartTime: Date.now(), pausedAt: Date.now(), entries: 0, playersRemaining: 0 }, lastModified: Date.now() 
+                    };
 
                     docRef.set(initialState);
                 }
@@ -2124,6 +2205,7 @@
                 if (localBackup.weeklyPresets) setWeeklyPresets(localBackup.weeklyPresets);
                 if (localBackup.autoBlindEnabled !== undefined) setAutoBlindEnabled(localBackup.autoBlindEnabled);
                 if (localBackup.adminLock) setAdminLock(localBackup.adminLock);
+                if (localBackup.geofenceConfig) setGeofenceConfig(localBackup.geofenceConfig);
                 if (localBackup.systemMode) setSystemMode(localBackup.systemMode);
                 if (localBackup.activeTournamentEventId !== undefined) setActiveTournamentEventId(localBackup.activeTournamentEventId);
                 if (localBackup.tournamentState) setTournamentState(localBackup.tournamentState);
@@ -2188,6 +2270,43 @@
           if (unsub) unsub();
         };
       }, [view]);
+
+      // --- GEOFENCE VERIFICATION LOGIC ---
+      useEffect(() => {
+          // Haversine formula to calculate distance between two GPS coordinates
+          const getDistanceFromLatLonInM = (lat1, lon1, lat2, lon2) => {
+              const R = 6371000; // Radius of the earth in meters
+              const dLat = (lat2 - lat1) * (Math.PI / 180);
+              const dLon = (lon2 - lon1) * (Math.PI / 180);
+              const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              return R * c; // Distance in meters
+          };
+
+          if (geofenceConfig.enabled && ['guest-setup', 'guest-dash'].includes(view)) {
+              if ("geolocation" in navigator) {
+                  navigator.geolocation.getCurrentPosition(
+                      (position) => {
+                          const distance = getDistanceFromLatLonInM(geofenceConfig.latitude, geofenceConfig.longitude, position.coords.latitude, position.coords.longitude);
+                          if (distance <= geofenceConfig.radiusMeters) {
+                              setGuestLocationValid(true);
+                          } else {
+                              setGuestLocationValid(false);
+                          }
+                      },
+                      (error) => {
+                          console.warn("Geolocation error:", error);
+                          setGuestLocationValid(false); // Block if they deny location access
+                      },
+                      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                  );
+              } else {
+                  setGuestLocationValid(false); // Block if browser doesn't support GPS
+              }
+          } else {
+              setGuestLocationValid(true); // Always allow if disabled or if Admin
+          }
+      }, [geofenceConfig, view]);
 
       const visibleBlindsList = BLINDS.filter(b => blindVis[b.prefix] !== false);
 
@@ -3201,6 +3320,11 @@
                                   <button onClick={() => setTableModalOpen(true)} className="bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Manage Tables</button>
                                   <button onClick={() => updateCloudState({ requireConfirm: !requireConfirm })} className="col-span-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Require Confirmation: {requireConfirm ? 'ON' : 'OFF (Bypass)'}</button>
                                   <button onClick={() => updateCloudState({ requireMemberInfo: !requireMemberInfo })} className="col-span-1 bg-[#d8b46e] hover:bg-[#c29e5a] text-black font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition">Member Req: {requireMemberInfo ? 'ON (Strict)' : 'OFF (Bypass)'}</button>
+                                  
+                                  <button onClick={() => setGeofenceModalOpen(true)} className={`col-span-2 font-bold text-[10px] sm:text-xs py-2 px-2 rounded shadow transition border ${geofenceConfig.enabled ? 'bg-green-700 text-white border-green-500' : 'bg-gray-700 text-gray-300 border-gray-500 hover:bg-gray-600'}`}>
+                                      Location Security: {geofenceConfig.enabled ? 'ON (Restricted)' : 'OFF (Open Access)'}
+                                  </button>
+
                                 </div>
                                 <div className="flex flex-col gap-2 mt-2">
                                   <button onClick={() => triggerDownloads(false)} className="w-full bg-green-700 hover:bg-green-600 text-white font-bold text-xs py-2 rounded transition shadow flex items-center justify-center gap-2"><Icons.Download /> Backup / Download History</button>
@@ -3328,6 +3452,21 @@
             </footer>
           ) : null}
 
+          {/* BLOCK SCREEN FOR GEOFENCE RESTRICTION */}
+          {geofenceConfig.enabled && guestLocationValid === false && ['guest-setup', 'guest-dash'].includes(view) ? (
+              <div className="fixed inset-0 z-[999] bg-black flex flex-col items-center justify-center p-6 text-center">
+                  <Icons.Alert className="w-16 h-16 text-red-500 mb-4" />
+                  <h2 className="text-2xl font-black text-[#D8B673] mb-2 uppercase tracking-widest">Access Restricted</h2>
+                  <p className="text-gray-300 max-w-md leading-relaxed">
+                      For security purposes, access to the Resort Poker Hub requires you to be physically present at the Casino.<br/><br/>
+                      Please ensure you have granted <b>Location Access</b> to your browser. If you are already at the venue, try refreshing the page.
+                  </p>
+                  <button onClick={() => window.location.reload()} className="mt-8 px-6 py-3 bg-[#D8B673] text-black font-bold rounded hover:bg-[#c29e5a] transition shadow-lg">Refresh & Try Again</button>
+                  <button onClick={() => setView('admin-login')} className="mt-8 text-gray-600 text-[10px] underline">Admin Override</button>
+              </div>
+          ) : null}
+
+          {}
           {showNewDayReminder && view === 'admin-dash' ? (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
               <div className="bg-[#1e293b] border border-red-500 p-6 rounded-xl shadow-2xl max-w-md w-full text-center">
@@ -3375,6 +3514,7 @@
           {resetModalOpen ? <AdminResetModal onClose={() => setResetModalOpen(false)} onReset={handleAdvancedReset} /> : null}
           {adminRegisterOpen ? <AdminFastRegisterModal visibleBlinds={visibleBlindsList} onClose={() => setAdminRegisterOpen(false)} onRegister={handleAdminFastRegister} setDialog={setDialog} /> : null}
           {blindModalOpen ? <AdminBlindModal blindVis={blindVis} updateBlindVis={(v) => updateCloudState({ blindVis: v })} autoBlindEnabled={autoBlindEnabled} updateAutoBlindEnabled={(v) => updateCloudState({ autoBlindEnabled: v })} weeklyPresets={weeklyPresets} updateWeeklyPresets={(v) => updateCloudState({ weeklyPresets: v })} onClose={() => setBlindModalOpen(false)} now={now} /> : null}
+          {geofenceModalOpen ? <AdminGeofenceModal config={geofenceConfig} onClose={() => setGeofenceModalOpen(false)} onSave={(newConfig) => { updateCloudState({ geofenceConfig: newConfig }); setGeofenceModalOpen(false); }} /> : null}
 
           {restoreModalOpen ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
